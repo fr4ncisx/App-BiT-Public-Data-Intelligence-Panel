@@ -6,10 +6,10 @@ import org.springframework.validation.annotation.Validated;
 
 import java.net.URI;
 
-@ConfigurationProperties(prefix = "appbit.cors")
+@ConfigurationProperties(prefix = "appbit.api.cors")
 @Validated
 public record CorsProperties(
-        @NotBlank(message = "appbit.cors.allowed-origin must not be blank")
+        @NotBlank(message = "appbit.api.cors.allowed-origins must not be blank")
         String allowedOrigins
 ) {
 
@@ -17,7 +17,7 @@ public record CorsProperties(
         allowedOrigins = allowedOrigins == null ? null : allowedOrigins.strip();
 
         if (allowedOrigins != null && !allowedOrigins.isBlank() && !isValidOrigin(allowedOrigins)) {
-            throw new IllegalArgumentException("appbit.cors.allowed-origin must be a valid origin, for example: https://app.example.com");
+            throw new IllegalArgumentException("appbit.api.cors.allowed-origins must be a valid origin, for example: https://app.example.com");
         }
     }
 
