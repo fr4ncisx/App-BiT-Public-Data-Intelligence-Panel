@@ -34,7 +34,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-          --health-start-period 10s
+        command: server /data --console-address ":9001"
 
     env:
       APPBIT_STORAGE_R2_ENDPOINT: http://localhost:9000
@@ -50,12 +50,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "25"
@@ -63,11 +63,13 @@ jobs:
 
       - name: Create MinIO bucket
         run: |
-          curl -sSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
-          chmod +x /usr/local/bin/mc
-          mc alias set local http://localhost:9000 appbit_admin appbit_admin
-          mc mb --ignore-existing local/appbit-datasets
-          mc cp /dev/null local/appbit-datasets/raw/visent-cdrview/.keep
+          curl -sSL https://dl.min.io/client/mc/release/linux-amd64/mc -o ./mc
+          chmod +x ./mc
+          ./mc alias set local http://localhost:9000 appbit_admin appbit_admin
+          ./mc mb --ignore-existing local/appbit-datasets
+          rm ./mc
 
       - name: Run storage integration tests
-        run: ./mvnw -B -ntp test -Dtest=S3DatasetObjectStorageIntegrationTest
+        run: |
+          chmod +x ./mvnw
+          ./mvnw -B -ntp test -Dtest=S3DatasetObjectStorageIntegrationTest
