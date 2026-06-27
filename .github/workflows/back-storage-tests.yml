@@ -1,0 +1,73 @@
+name: back-storage-tests
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths: ["back/**"]
+  push:
+    branches: [main]
+    paths: ["back/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: back-storage-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  storage-integration:
+    name: Storage Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      minio:
+        image: minio/minio:latest
+        ports:
+          - "9000:9000"
+        env:
+          MINIO_ROOT_USER: appbit_admin
+          MINIO_ROOT_PASSWORD: appbit_admin
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 10s
+
+    env:
+      APPBIT_STORAGE_R2_ENDPOINT: http://localhost:9000
+      APPBIT_STORAGE_R2_ACCESS_KEY_ID: appbit_admin
+      APPBIT_STORAGE_R2_SECRET_ACCESS_KEY: appbit_admin
+      APPBIT_STORAGE_R2_BUCKET_NAME: appbit-datasets
+      APPBIT_STORAGE_R2_REGION: auto
+      APPBIT_STORAGE_R2_CSV_PREFIX: raw/visent-cdrview
+
+    defaults:
+      run:
+        working-directory: back
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Create MinIO bucket
+        run: |
+          curl -sSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
+          chmod +x /usr/local/bin/mc
+          mc alias set local http://localhost:9000 appbit_admin appbit_admin
+          mc mb --ignore-existing local/appbit-datasets
+          mc cp /dev/null local/appbit-datasets/raw/visent-cdrview/.keep
+
+      - name: Run storage integration tests
+        run: ./mvnw -B -ntp test -Dtest=S3DatasetObjectStorageIntegrationTest
