@@ -9,6 +9,7 @@ COPY pom.xml ./
 RUN ./mvnw \
     --batch-mode \
     --quiet \
+    --no-transfer-progress \
     -DskipTests \
     dependency:go-offline
 
@@ -22,6 +23,7 @@ COPY src/ src/
 RUN ./mvnw \
     --batch-mode \
     --quiet \
+    --no-transfer-progress \
     -DskipTests \
     package \
     && artifact_path="$(find target \
@@ -56,7 +58,7 @@ RUN mkdir -p /tmp/extracted \
     --strip-debug \
     --no-man-pages \
     --no-header-files \
-    --compress=zip-9 \
+    --compress=2 \
     --output /opt/java/minimal-jre \
     && /opt/java/minimal-jre/bin/java -version
 
@@ -83,6 +85,7 @@ RUN apk add --no-cache \
     ca-certificates \
     libstdc++ \
     tini \
+    wget \
     && addgroup \
     --system \
     --gid 65532 \
@@ -95,7 +98,8 @@ RUN apk add --no-cache \
     --shell /sbin/nologin \
     appuser \
     && mkdir -p /tmp \
-    && chown appuser:appgroup /app /tmp
+    --mode=1777 \
+    && chown appuser:appgroup /app
 
 COPY --from=jre \
     /opt/java/minimal-jre \
@@ -109,8 +113,6 @@ COPY --from=build \
 USER appuser
 
 EXPOSE 8080 9090
-
-VOLUME /tmp
 
 HEALTHCHECK \
     --interval=30s \
