@@ -1,0 +1,48 @@
+name: appbit-storage
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: appbit-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "${APPBIT_STORAGE_R2_ACCESS_KEY_ID:?APPBIT_STORAGE_R2_ACCESS_KEY_ID is required}"
+      MINIO_ROOT_PASSWORD: "${APPBIT_STORAGE_R2_SECRET_ACCESS_KEY:?APPBIT_STORAGE_R2_SECRET_ACCESS_KEY is required}"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: appbit-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: "${APPBIT_STORAGE_R2_ACCESS_KEY_ID:?APPBIT_STORAGE_R2_ACCESS_KEY_ID is required}"
+      MINIO_ROOT_PASSWORD: "${APPBIT_STORAGE_R2_SECRET_ACCESS_KEY:?APPBIT_STORAGE_R2_SECRET_ACCESS_KEY is required}"
+      APPBIT_STORAGE_R2_BUCKET_NAME: "${APPBIT_STORAGE_R2_BUCKET_NAME:?APPBIT_STORAGE_R2_BUCKET_NAME is required}"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        mc alias set appbit-local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb --ignore-existing "appbit-local/$${APPBIT_STORAGE_R2_BUCKET_NAME}"
+        touch /tmp/.keep
+        mc cp /tmp/.keep "appbit-local/$${APPBIT_STORAGE_R2_BUCKET_NAME}/raw/visent-cdrview/.keep"
+    restart: "no"
+
+volumes:
+  minio-data:
+    name: appbit-minio-data
+
