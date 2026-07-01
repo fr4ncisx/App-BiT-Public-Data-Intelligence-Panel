@@ -1,0 +1,82 @@
+name: QA - Validación end-to-end
+about: Validar el flujo principal del MVP mapa, filtros, consulta IA, fuentes y advertencias.
+title: "QA: validación end-to-end - "
+labels: ["qa", "e2e"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Usar este template para validar el flujo completo desde la interfaz hasta la API.
+        El objetivo no es registrar una lista extensa de checks, sino documentar evidencia funcional del MVP.
+
+  - type: input
+    id: scope
+    attributes:
+      label: Alcance validado
+      description: Indicar el flujo o módulo validado.
+      placeholder: "Mapa territorial + consulta IA + fuentes + warnings"
+    validations:
+      required: true
+
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Escenario funcional
+      description: Describir el escenario como lo ejecutaría un usuario objetivo.
+      placeholder: |
+        Como gestor público, selecciono una región, reviso concentración y conectividad, ejecuto una consulta en lenguaje natural y verifico que la respuesta incluya evidencia, fuentes y advertencias.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos ejecutados
+      description: Documentar pasos claros y reproducibles.
+      placeholder: |
+        1. Abrir la aplicación.
+        2. Seleccionar región.
+        3. Seleccionar indicador.
+        4. Ejecutar consulta.
+        5. Revisar mapa, panel lateral, fuentes y advertencias.
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: Resultado observado
+      description: Describir lo que ocurrió realmente. Incluir mensajes visibles, datos mostrados y comportamiento del mapa.
+      placeholder: "La región seleccionada actualiza el panel lateral, el mapa conserva marcadores y la respuesta IA muestra resumen, datos, fuentes y advertencias."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Resultado esperado
+      description: Describir el comportamiento esperado según PRD/backlog.
+      placeholder: "El usuario debe poder entender qué región requiere atención prioritaria, con datos agregados y fuentes trazables."
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidencia adjunta
+      description: Capturas, video, payload de request/response, logs o enlaces a deploy.
+      placeholder: "Adjuntar evidencia o pegar extractos mínimos relevantes. No incluir secretos."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: status
+    attributes:
+      label: Estado QA
+      options:
+        - Aprobado
+        - Aprobado con observaciones
+        - Requiere corrección
+        - Bloqueado
+    validations:
+      required: true

@@ -1,0 +1,100 @@
+name: QA - Validación API y datos
+about: Validar contratos API, trazabilidad, fuentes, warnings, privacidad y consistencia de datos.
+title: "QA: validación API/datos - "
+labels: ["qa", "api", "data"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Usar este template para validar endpoints, estructura de respuesta, datos agregados y trazabilidad.
+        Aplica especialmente a /api/v1/data/queries, /api/v1/maps/regions, /api/v1/data/catalog, /api/v1/data/sources y /api/v1/maps/flows.
+
+  - type: input
+    id: endpoint
+    attributes:
+      label: Endpoint validado
+      placeholder: "GET /api/v1/maps/regions"
+    validations:
+      required: true
+
+  - type: textarea
+    id: request
+    attributes:
+      label: Request utilizado
+      description: Indicar query params, body o filtros. No incluir secretos.
+      render: json
+      placeholder: |
+        {
+          "query": "¿Dónde hay alta concentración y baja conectividad?",
+          "filters": {
+            "regionCode": "",
+            "indicatorType": "",
+            "period": ""
+          },
+          "language": "es"
+        }
+    validations:
+      required: false
+
+  - type: textarea
+    id: response_shape
+    attributes:
+      label: Estructura de response observada
+      description: Confirmar envelope ApiResponse y campos funcionales relevantes.
+      render: json
+      placeholder: |
+        {
+          "success": true,
+          "status": 200,
+          "code": "...",
+          "message": "...",
+          "data": {}
+        }
+    validations:
+      required: true
+
+  - type: textarea
+    id: data_validation
+    attributes:
+      label: Validación de datos
+      description: Explicar si los datos son agregados, trazables y coherentes con el alcance del MVP.
+      placeholder: |
+        Las regiones incluyen coordenadas, indicadores agregados, sourceType y confidenceLevel.
+        No se observan identificadores individuales ni trayectos personales.
+    validations:
+      required: true
+
+  - type: textarea
+    id: sources_warnings
+    attributes:
+      label: Fuentes, advertencias y confianza
+      description: Indicar si la respuesta muestra fuentes, warnings, datos insuficientes o tipo de fuente.
+      placeholder: "La respuesta diferencia SEED_DATA, COMPLEMENTARY_SOURCE, ESTIMATED o fuente real cuando aplica."
+    validations:
+      required: true
+
+  - type: textarea
+    id: errors
+    attributes:
+      label: Casos de error validados
+      description: Documentar validaciones negativas relevantes.
+      placeholder: |
+        - query vacío
+        - regionCode inexistente
+        - fuente no disponible
+        - evidencia insuficiente
+        - error de IA no disponible
+    validations:
+      required: false
+
+  - type: dropdown
+    id: status
+    attributes:
+      label: Estado QA
+      options:
+        - Aprobado
+        - Aprobado con observaciones
+        - Requiere corrección
+        - Bloqueado
+    validations:
+      required: true
