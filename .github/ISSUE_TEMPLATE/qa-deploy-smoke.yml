@@ -1,0 +1,76 @@
+name: QA - Smoke test deploy
+about: Validar que backend, frontend y configuración productiva funcionen sin intervención técnica.
+title: "QA: smoke test deploy - "
+labels: ["qa", "deploy", "smoke-test"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Usar este template para validar el despliegue del MVP y su conexión entre frontend, backend y base de datos.
+        No pegar secretos, tokens, cadenas de conexión ni variables sensibles.
+
+  - type: dropdown
+    id: target
+    attributes:
+      label: Ambiente validado
+      options:
+        - Local
+        - Preview
+        - Producción
+    validations:
+      required: true
+
+  - type: textarea
+    id: services
+    attributes:
+      label: Servicios validados
+      placeholder: |
+        - Backend Render:
+        - PostgreSQL Aiven:
+        - Frontend Cloudflare Pages:
+        - Health check:
+        - NEXT_PUBLIC_API_BASE_URL:
+    validations:
+      required: true
+
+  - type: textarea
+    id: smoke_flow
+    attributes:
+      label: Flujo smoke ejecutado
+      placeholder: |
+        1. Abrir frontend publicado.
+        2. Confirmar que consume backend público.
+        3. Validar health check.
+        4. Validar mapa con datos mínimos.
+        5. Ejecutar consulta IA con evidencia.
+        6. Confirmar fuentes y advertencias.
+    validations:
+      required: true
+
+  - type: textarea
+    id: result
+    attributes:
+      label: Resultado observado
+      placeholder: "El flujo principal carga sin intervención técnica y muestra datos suficientes para demo."
+    validations:
+      required: true
+
+  - type: textarea
+    id: blockers
+    attributes:
+      label: Bloqueantes o riesgos detectados
+      placeholder: "Indicar errores de CORS, memoria, startup, variables, conexión DB, build o datos faltantes."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: status
+    attributes:
+      label: Estado QA
+      options:
+        - Aprobado
+        - Aprobado con observaciones
+        - Requiere corrección
+        - Bloqueado
+    validations:
+      required: true
