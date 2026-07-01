@@ -1,0 +1,82 @@
+name: QA - Accesibilidad y responsividad
+about: Validar uso en escritorio, tablet, celular, navegación mínima, foco, labels y contraste.
+title: "QA: accesibilidad/responsividad - "
+labels: ["qa", "accessibility", "frontend"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Usar este template para validar que la interfaz sea usable por perfiles no técnicos en distintos dispositivos.
+        El foco está en mapa, filtros, consulta, panel lateral, fuentes, advertencias y estados de UI.
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Pantalla o flujo validado
+      placeholder: "Pantalla de mapa, pantalla de consulta, filtros, panel lateral, respuesta IA, estados vacíos/error."
+    validations:
+      required: true
+
+  - type: textarea
+    id: devices
+    attributes:
+      label: Dispositivos o viewports probados
+      placeholder: |
+        - Escritorio:
+        - Tablet:
+        - Celular:
+        - Navegador:
+    validations:
+      required: true
+
+  - type: textarea
+    id: usability
+    attributes:
+      label: Hallazgos de usabilidad
+      description: Explicar si el usuario puede entender métricas, fuentes, advertencias y acciones siguientes.
+      placeholder: "El panel lateral permite entender concentración, conectividad, indicador social y fuente sin conocimiento técnico."
+    validations:
+      required: true
+
+  - type: textarea
+    id: accessibility
+    attributes:
+      label: Hallazgos de accesibilidad básica
+      description: Documentar labels, foco, contraste, navegación por teclado y mensajes de estado.
+      placeholder: |
+        - Los filtros tienen label visible o accesible.
+        - El foco es visible.
+        - Los estados de error son comprensibles.
+        - La navegación por teclado no queda atrapada.
+    validations:
+      required: true
+
+  - type: textarea
+    id: responsive
+    attributes:
+      label: Hallazgos de responsividad
+      description: Describir comportamiento del layout, mapa, filtros y tarjetas.
+      placeholder: "En celular, los filtros siguen accesibles y el mapa no bloquea la lectura de resultados."
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidencia visual
+      description: Adjuntar capturas o video. Indicar resolución cuando sea relevante.
+      placeholder: "Adjuntar capturas por viewport."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: status
+    attributes:
+      label: Estado QA
+      options:
+        - Aprobado
+        - Aprobado con observaciones
+        - Requiere corrección
+        - Bloqueado
+    validations:
+      required: true

@@ -1,0 +1,96 @@
+name: QA - Error crítico
+about: Reportar errores que bloquean build, API, CORS, datos, renderizado o flujo principal.
+title: "QA: error crítico - "
+labels: ["qa", "bug", "critical"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Usar este template cuando el error impide validar el MVP o rompe un flujo P0.
+        El reporte debe permitir reproducir, diagnosticar y priorizar sin depender de conversaciones externas.
+
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: Área afectada
+      options:
+        - Backend API
+        - Frontend UI
+        - Ingesta de datos
+        - Mapa
+        - Consulta IA
+        - CORS / integración
+        - Build / deploy
+        - Base de datos
+        - Documentación bloqueante
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Resumen del problema
+      description: Explicar el fallo en términos funcionales y técnicos.
+      placeholder: "El endpoint GET /api/v1/maps/regions responde 500 y el mapa queda sin datos, por lo que no puede validarse la demo principal."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Pasos para reproducir
+      description: Incluir ambiente, acción realizada y datos mínimos usados.
+      placeholder: |
+        1. Levantar backend con perfil dev.
+        2. Ejecutar seed mínimo.
+        3. Abrir frontend.
+        4. Entrar a pantalla de mapa.
+        5. Observar error en consola o response.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamiento esperado
+      placeholder: "El mapa debe recibir regiones con coordenadas e indicadores agregados dentro de ApiResponse."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamiento actual
+      placeholder: "La API devuelve error, la UI muestra estado inconsistente o el flujo queda bloqueado."
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impacto sobre el MVP
+      description: Explicar qué criterio de aceptación queda bloqueado.
+      placeholder: "Bloquea mapa funcional, consulta territorial o trazabilidad de fuentes."
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidencia técnica
+      description: Logs, response, stacktrace parcial, captura, consola del navegador. No incluir secretos.
+      render: shell
+      placeholder: "Pegar extracto relevante."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Prioridad sugerida
+      options:
+        - P0 - Bloquea MVP
+        - P1 - Afecta estabilidad o trazabilidad
+        - P2 - No bloquea MVP
+    validations:
+      required: true
