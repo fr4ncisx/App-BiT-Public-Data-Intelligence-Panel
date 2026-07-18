@@ -3,6 +3,7 @@ package com.appbit.geoanalytics.domain.region.vo;
 import com.appbit.geoanalytics.domain.region.exception.MissingRegionCodeException;
 import com.appbit.geoanalytics.domain.region.exception.RegionDomainException;
 
+import java.text.Normalizer;
 import java.util.Locale;
 
 public record RegionCode(String value) {
@@ -15,7 +16,9 @@ public record RegionCode(String value) {
             throw new MissingRegionCodeException("RegionCode cannot be null");
         }
 
-        value = value.trim().toUpperCase(Locale.ROOT);
+        value = Normalizer.normalize(value.trim(), Normalizer.Form.NFD)
+                .replaceAll("[\\p{InCombiningDiacriticalMarks}]", "")
+                .toUpperCase(Locale.ROOT);
 
         if (value.isBlank()) {
             throw new MissingRegionCodeException("RegionCode cannot be blank");

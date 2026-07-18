@@ -1,11 +1,14 @@
 package com.appbit.geoanalytics.domain.source.model;
 
+import com.appbit.geoanalytics.domain.source.enums.ConfidenceLevel;
 import com.appbit.geoanalytics.domain.source.enums.DataSourceType;
+import com.appbit.geoanalytics.domain.source.enums.GovernanceType;
 import com.appbit.geoanalytics.domain.source.exception.SourceDomainException;
 import com.appbit.geoanalytics.domain.source.vo.DataSourceId;
 import com.appbit.geoanalytics.domain.source.vo.SourceFileName;
 import lombok.Builder;
 import lombok.Getter;
+import org.jspecify.annotations.Nullable;
 
 @Getter
 public final class DataSource {
@@ -15,6 +18,10 @@ public final class DataSource {
     private final SourceFileName fileName;
     private final DataSourceType sourceType;
     private final String description;
+    private final @Nullable ConfidenceLevel confidenceLevel;
+    private final @Nullable String periodStart;
+    private final @Nullable String periodEnd;
+    private final @Nullable GovernanceType governanceType;
 
     @Builder
     public DataSource(
@@ -22,7 +29,11 @@ public final class DataSource {
             String sourceName,
             SourceFileName fileName,
             DataSourceType sourceType,
-            String description
+            String description,
+            @Nullable ConfidenceLevel confidenceLevel,
+            @Nullable String periodStart,
+            @Nullable String periodEnd,
+            @Nullable GovernanceType governanceType
     ) {
         if (id == null) {
             throw new SourceDomainException("Data source id cannot be null");
@@ -41,6 +52,10 @@ public final class DataSource {
         this.fileName = fileName;
         this.sourceType = sourceType;
         this.description = validateText(description, "Description", 5, 500);
+        this.confidenceLevel = confidenceLevel;
+        this.periodStart = periodStart;
+        this.periodEnd = periodEnd;
+        this.governanceType = governanceType;
     }
 
     private String validateText(String value, String fieldName, int minLength, int maxLength) {
