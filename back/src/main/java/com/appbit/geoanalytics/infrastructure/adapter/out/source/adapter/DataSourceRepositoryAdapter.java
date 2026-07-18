@@ -8,6 +8,7 @@ import com.appbit.geoanalytics.infrastructure.adapter.out.source.repository.Data
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -20,5 +21,10 @@ public class DataSourceRepositoryAdapter implements DataSourcePort {
     @Override
     public Optional<SourceCatalogEntry> findByFileName(SourceFileName fileName) {
         return mapper.toSourceCatalogEntry(repository.findByFileName(fileName.value()));
+    }
+
+    @Override
+    public List<SourceCatalogEntry> findAll() {
+        return mapper.toSourceCatalogEntryList(repository.findAll());
     }
 }

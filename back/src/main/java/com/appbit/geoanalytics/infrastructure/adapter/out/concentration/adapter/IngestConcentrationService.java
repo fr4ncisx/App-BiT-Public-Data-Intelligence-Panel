@@ -2,6 +2,8 @@ package com.appbit.geoanalytics.infrastructure.adapter.out.concentration.adapter
 
 import com.appbit.geoanalytics.application.concentration.in.IngestConcentrationResult;
 import com.appbit.geoanalytics.application.concentration.in.IngestConcentrationUseCase;
+import com.appbit.geoanalytics.application.ingestion.in.CsvIngestService;
+import com.appbit.geoanalytics.application.ingestion.in.dto.CsvIngestResult;
 import com.appbit.geoanalytics.application.shared.port.out.IdGeneratorPort;
 import com.appbit.geoanalytics.application.source.out.DataSourcePort;
 import com.appbit.geoanalytics.application.storage.dto.DatasetObjectKey;
@@ -11,25 +13,30 @@ import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.Ant
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.RegionJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.concentration.csv.ConcentrationCsvRow;
 import com.appbit.geoanalytics.infrastructure.adapter.out.concentration.entity.ConcentrationMetricEntity;
-import com.appbit.geoanalytics.infrastructure.adapter.out.concentration.repository.ConcentrationMetricJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-@Service
+@Component
 @RequiredArgsConstructor
-public class IngestConcentrationService implements IngestConcentrationUseCase {
+@Slf4j
+public class IngestConcentrationService implements IngestConcentrationUseCase, CsvIngestService {
 
     private static final Set<String> VALID_PERIODS = Set.of("MADRUGADA", "MANHA", "TARDE", "NOITE");
     private static final BigDecimal MIN_LAT = new BigDecimal("-90");
@@ -40,17 +47,21 @@ public class IngestConcentrationService implements IngestConcentrationUseCase {
     private final DatasetObjectStoragePort storagePort;
     private final DataSourcePort dataSourcePort;
     private final GenericCsvReader csvReader;
-    private final ConcentrationMetricJpaRepository concentrationRepository;
     private final AntennaJpaRepository antennaRepository;
     private final RegionJpaRepository regionRepository;
     private final IngestionLifecycleManager lifecycleManager;
     private final TransactionTemplate transactionTemplate;
     private final IdGeneratorPort idGeneratorPort;
+    private final JdbcTemplate jdbcTemplate;
 
     @Override
     public IngestConcentrationResult execute(DatasetObjectKey key) {
         var sourceId = resolveSourceId(key.value());
         var ingestionRun = lifecycleManager.start(key.value(), sourceId);
+
+        if (ingestionRun == null) {
+            return IngestConcentrationResult.of(0, 0, 0);
+        }
 
         try {
             var result = transactionTemplate.execute(_ -> ingest(key, sourceId));
@@ -83,17 +94,7 @@ public class IngestConcentrationService implements IngestConcentrationUseCase {
                 }
             }
 
-            metricsToInsert.forEach(metric ->
-                    concentrationRepository.insertIgnoreConflict(
-                            metric.getId(), metric.getSourceId(), metric.getRegionId(),
-                            metric.getEcgi(), metric.getClusterName(), metric.getMunicipality(),
-                            metric.getDayDate(), metric.getPeriod(), metric.getActiveUsers(),
-                            metric.getSessions(), metric.getDownloadBytes(), metric.getUploadBytes(),
-                            metric.getAverageSessionDurationSeconds(), metric.getAverageDropRate(),
-                            metric.getAverageCongestion(), metric.getTotalCalls(), metric.getTotalMessages(),
-                            metric.getLatitude(), metric.getLongitude(), metric.getCreatedAt()
-                    )
-            );
+            batchInsertConcentrationMetrics(metricsToInsert);
 
             return IngestConcentrationResult.of(readCount, metricsToInsert.size(), rejected);
 
@@ -102,14 +103,71 @@ public class IngestConcentrationService implements IngestConcentrationUseCase {
         }
     }
 
+    private void batchInsertConcentrationMetrics(List<ConcentrationMetricEntity> metrics) {
+        String sql = """
+            INSERT INTO concentration_metrics (
+                id, source_id, region_id, ecgi, cluster_name, municipality,
+                day_date, period, active_users, sessions, download_bytes, upload_bytes,
+                average_session_duration_seconds, average_drop_rate, average_congestion,
+                total_calls, total_messages, latitude, longitude, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (source_id, ecgi, day_date, period) DO NOTHING
+            """;
+
+        int batchSize = 500;
+        for (int i = 0; i < metrics.size(); i += batchSize) {
+            List<ConcentrationMetricEntity> batch = metrics.subList(i, Math.min(i + batchSize, metrics.size()));
+            jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+                @Override
+                public void setValues(java.sql.PreparedStatement ps, int idx) throws java.sql.SQLException {
+                    ConcentrationMetricEntity metric = batch.get(idx);
+                    ps.setObject(1, metric.getId());
+                    ps.setObject(2, metric.getSourceId());
+                    ps.setObject(3, metric.getRegionId());
+                    ps.setString(4, metric.getEcgi());
+                    ps.setString(5, metric.getClusterName());
+                    ps.setString(6, metric.getMunicipality());
+                    ps.setObject(7, metric.getDayDate());
+                    ps.setString(8, metric.getPeriod());
+                    ps.setLong(9, metric.getActiveUsers());
+                    ps.setLong(10, metric.getSessions());
+                    ps.setLong(11, metric.getDownloadBytes());
+                    ps.setLong(12, metric.getUploadBytes());
+                    ps.setInt(13, metric.getAverageSessionDurationSeconds());
+                    ps.setBigDecimal(14, metric.getAverageDropRate());
+                    ps.setBigDecimal(15, metric.getAverageCongestion());
+                    ps.setInt(16, metric.getTotalCalls());
+                    ps.setInt(17, metric.getTotalMessages());
+                    ps.setBigDecimal(18, metric.getLatitude());
+                    ps.setBigDecimal(19, metric.getLongitude());
+                    ps.setTimestamp(20, Timestamp.from(metric.getCreatedAt()));
+                }
+
+                @Override
+                public int getBatchSize() {
+                    return batch.size();
+                }
+            });
+        }
+    }
+
     private ConcentrationMetricEntity processRow(ConcentrationCsvRow row, Set<String> existingEcgis, Set<String> processedKeys, UUID sourceId) {
-        if (!isValidRow(row, existingEcgis)) return null;
+        if (!isValidRow(row, existingEcgis)) {
+            log.warn("Rejected ECGI {}: validation failed", row.ecgi().trim());
+            return null;
+        }
 
         var compositeKey = row.ecgi().trim() + "|" + row.dayDate().trim() + "|" + row.periodo().trim().toUpperCase();
-        if (!processedKeys.add(compositeKey)) return null;
+        if (!processedKeys.add(compositeKey)) {
+            log.warn("Rejected duplicate: {}", compositeKey);
+            return null;
+        }
 
-        var region = regionRepository.findByClusterNameAndMunicipality(row.cluster().trim(), row.municipio().trim());
-        if (region.isEmpty()) return null;
+        var region = regionRepository.findByClusterName(row.cluster().trim());
+        if (region.isEmpty()) {
+            log.warn("Rejected ECGI {}: region not found for cluster={} municipio={}", row.ecgi().trim(), row.cluster().trim(), row.municipio().trim());
+            return null;
+        }
 
         return createMetric(row, sourceId, region.get().getId());
     }
@@ -160,6 +218,17 @@ public class IngestConcentrationService implements IngestConcentrationUseCase {
                 .longitude(new BigDecimal(row.lon().trim()))
                 .createdAt(Instant.now())
                 .build();
+    }
+
+    @Override
+    public String supportedFileName() {
+        return "tensor_concentracao.csv";
+    }
+
+    @Override
+    public CsvIngestResult ingest(DatasetObjectKey key) {
+        var result = execute(key);
+        return CsvIngestResult.of(result.rowsRead(), result.rowsInserted(), result.rowsRejected());
     }
 
     private UUID resolveSourceId(String fileName) {

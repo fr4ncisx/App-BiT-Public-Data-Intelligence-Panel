@@ -36,6 +36,18 @@ public class DataSourceEntity {
     @Column(name = "description", nullable = false, length = 500)
     private String description;
 
+    @Column(name = "confidence_level", length = 16)
+    private String confidenceLevel;
+
+    @Column(name = "period_start", length = 16)
+    private String periodStart;
+
+    @Column(name = "period_end", length = 16)
+    private String periodEnd;
+
+    @Column(name = "governance_type", length = 16)
+    private String governanceType;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 }
