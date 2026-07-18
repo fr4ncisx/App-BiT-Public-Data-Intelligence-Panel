@@ -1,5 +1,6 @@
 package com.appbit.geoanalytics.infrastructure.adapter.in.rest.advice;
 
+import com.appbit.geoanalytics.application.exception.ApplicationException;
 import com.appbit.geoanalytics.domain.exception.DomainException;
 import com.appbit.geoanalytics.infrastructure.adapter.in.rest.code.ApiResponseCode;
 import com.appbit.geoanalytics.infrastructure.adapter.in.rest.correlation.RequestContext;
@@ -414,6 +415,38 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 ApiResponseCode.VALIDATION_ERROR,
                 "The request violates a domain rule.",
+                List.of(error),
+                requestId
+        );
+    }
+
+    /**
+     * Handles application layer exceptions such as service unavailability.
+     *
+     * <p>Application exceptions represent controlled failures in the application
+     * layer, such as an external service (e.g. AI provider) being temporarily
+     * unreachable. They are not domain rule violations and should not be exposed
+     * as client errors.</p>
+     *
+     * @param ex application exception raised by an application service
+     * @return standardized HTTP 503 response with service unavailability detail
+     */
+    @ExceptionHandler(ApplicationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleApplicationException(ApplicationException ex) {
+        String requestId = requestContext.requestId();
+
+        log.warn("Application error [{}]: {}", requestId, ex.getMessage());
+
+        ApiResponse.ApiErrorDetail error = detail(
+                null,
+                fallback(ex.getMessage(), "An application error occurred."),
+                null
+        );
+
+        return apiResponseFactory.error(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                ApiResponseCode.AI_SERVICE_UNAVAILABLE,
+                "The AI service is temporarily unavailable.",
                 List.of(error),
                 requestId
         );
