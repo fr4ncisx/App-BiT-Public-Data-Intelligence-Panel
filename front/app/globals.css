@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+/* Minimal custom scrollbar for dashboard list grids */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ── Leaflet Tooltip Overrides ─────────────────────────────────────────────── */
+.leaflet-tooltip-custom {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.leaflet-tooltip {
+  font-family: monospace;
+}
+
+/* Hide default Leaflet tooltip arrow */
+.leaflet-tooltip::before {
+  display: none !important;
+}
+
+/* Override default Leaflet controls to match dark theme */
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background-color: #0b0c10 !important;
+  color: rgba(255,255,255,0.8) !important;
+  border-color: rgba(255,255,255,0.1) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #1a1b23 !important;
+  color: #34d399 !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(0,0,0,0.7) !important;
+  color: rgba(255,255,255,0.3) !important;
+  font-size: 9px !important;
+}
+
+.leaflet-control-attribution a {
+  color: rgba(255,255,255,0.45) !important;
+}
+
+/* ── Custom Animation Keyframes ─────────────────────────────────────────────── */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 50%, 90% { transform: translateX(-4px); }
+  30%, 70% { transform: translateX(4px); }
+}
+
+@keyframes bounce-slow {
+  0%, 100% { transform: translateY(0); animation-timing-function: cubic-bezier(0.8,0,1,1); }
+  50% { transform: translateY(-12px); animation-timing-function: cubic-bezier(0,0,0.2,1); }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ping-slow {
+  0% { transform: scale(1); opacity: 1; }
+  75%, 100% { transform: scale(1.8); opacity: 0; }
+}
+
+.animate-shake { animation: shake 0.5s ease-in-out; }
+.animate-bounce-slow { animation: bounce-slow 2.4s infinite; }
+.animate-spin-slow { animation: spin-slow 12s linear infinite; }
+.animate-ping-slow { animation: ping-slow 2s cubic-bezier(0,0,0.2,1) infinite; }
+
+/* ── Text Fit Grow: scales text to fill container width ─────────────────────── */
+.text-fit-grow {
+  text-fit: grow;
+}
