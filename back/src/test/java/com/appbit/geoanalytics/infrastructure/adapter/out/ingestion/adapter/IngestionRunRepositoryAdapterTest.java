@@ -132,4 +132,86 @@ class IngestionRunRepositoryAdapterTest {
         assertThat(saved.getStatus()).isEqualTo("FAILED");
         assertThat(saved.getErrorMessage()).isEqualTo("Storage unavailable");
     }
+
+    @Test
+    void shouldReturnEmptyWhenNoRunExists() {
+        UUID sourceId = DomainFixtures.uuidV7();
+        when(repository.findFirstBySourceIdAndFileNameOrderByStartedAtDesc(sourceId, "antenas_flp.csv")).thenReturn(java.util.Optional.empty());
+
+        var result = adapter.findLatestBySourceIdAndFileName(sourceId, "antenas_flp.csv");
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void shouldMapEntityToDomainWhenRunExists() {
+        UUID id = DomainFixtures.uuidV7();
+        UUID sourceId = DomainFixtures.uuidV7();
+        Instant startedAt = Instant.now();
+        Instant finishedAt = Instant.now().plusSeconds(30);
+
+        IngestionRunEntity entity = IngestionRunEntity.builder()
+                .id(id)
+                .sourceId(sourceId)
+                .fileName("antenas_flp.csv")
+                .status("COMPLETED")
+                .rowsRead(100)
+                .rowsInserted(95)
+                .rowsRejected(5)
+                .startedAt(startedAt)
+                .finishedAt(finishedAt)
+                .build();
+
+        when(repository.findFirstBySourceIdAndFileNameOrderByStartedAtDesc(sourceId, "antenas_flp.csv"))
+                .thenReturn(java.util.Optional.of(entity));
+
+        var result = adapter.findLatestBySourceIdAndFileName(sourceId, "antenas_flp.csv");
+
+        assertThat(result).isPresent();
+        var run = result.get();
+        assertThat(run.getId().value()).isEqualTo(id);
+        assertThat(run.getSourceId().value()).isEqualTo(sourceId);
+        assertThat(run.getState()).isEqualTo(IngestionState.COMPLETED);
+        assertThat(run.getRowsRead()).isEqualTo(100);
+        assertThat(run.getRowsInserted()).isEqualTo(95);
+        assertThat(run.getRowsRejected()).isEqualTo(5);
+        assertThat(run.getStartedAt()).isEqualTo(startedAt);
+        assertThat(run.getFinishedAt()).isEqualTo(finishedAt);
+    }
+
+    @Test
+    void shouldCopyVersionFromExistingEntityWhenSaving() {
+        UUID id = DomainFixtures.uuidV7();
+        UUID sourceId = DomainFixtures.uuidV7();
+        Instant startedAt = Instant.now();
+
+        IngestionRun run = IngestionRun.builder()
+                .id(new IngestionRunId(id))
+                .sourceId(new DataSourceId(sourceId))
+                .fileName(new SourceFileName("antenas_flp.csv"))
+                .state(IngestionState.RUNNING)
+                .startedAt(startedAt)
+                .build();
+
+        IngestionRunEntity existingEntity = IngestionRunEntity.builder()
+                .id(id)
+                .sourceId(sourceId)
+                .fileName("antenas_flp.csv")
+                .status("RUNNING")
+                .startedAt(startedAt)
+                .version(42L)
+                .build();
+
+        when(repository.findById(id)).thenReturn(java.util.Optional.of(existingEntity));
+        when(repository.save(org.mockito.ArgumentMatchers.any(IngestionRunEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        adapter.save(run);
+
+        ArgumentCaptor<IngestionRunEntity> captor = ArgumentCaptor.forClass(IngestionRunEntity.class);
+        verify(repository).save(captor.capture());
+
+        IngestionRunEntity saved = captor.getValue();
+        assertThat(saved.getVersion()).isEqualTo(42L);
+    }
 }

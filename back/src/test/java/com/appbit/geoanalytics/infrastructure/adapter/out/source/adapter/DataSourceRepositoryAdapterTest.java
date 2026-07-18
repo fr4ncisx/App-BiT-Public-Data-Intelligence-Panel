@@ -1,7 +1,6 @@
 package com.appbit.geoanalytics.infrastructure.adapter.out.source.adapter;
 
 import com.appbit.geoanalytics.application.source.out.SourceCatalogEntry;
-import com.appbit.geoanalytics.application.source.out.DataSourcePort;
 import com.appbit.geoanalytics.domain.source.enums.DataSourceType;
 import com.appbit.geoanalytics.domain.source.vo.SourceFileName;
 import com.appbit.geoanalytics.infrastructure.adapter.out.source.entity.DataSourceEntity;
@@ -16,6 +15,7 @@ import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -114,5 +114,43 @@ class DataSourceRepositoryAdapterTest {
 
         assertThat(result.fileName()).isInstanceOf(SourceFileName.class);
         assertThat(result.fileName().value()).isEqualTo("mapping_test.csv");
+    }
+
+    @Test
+    void shouldReturnAllDataSources() {
+        DataSourceEntity entity1 = DataSourceEntity.builder()
+                .id(UUID.randomUUID())
+                .sourceName("Source 1")
+                .fileName("file1.csv")
+                .sourceType("SYNTHETIC_DATASET")
+                .description("First file.")
+                .createdAt(Instant.now())
+                .build();
+
+        DataSourceEntity entity2 = DataSourceEntity.builder()
+                .id(UUID.randomUUID())
+                .sourceName("Source 2")
+                .fileName("file2.csv")
+                .sourceType("SEED_DATA")
+                .description("Second file.")
+                .createdAt(Instant.now())
+                .build();
+
+        entityManager.persistAndFlush(entity1);
+        entityManager.persistAndFlush(entity2);
+
+        List<SourceCatalogEntry> result = adapter.findAll();
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(SourceCatalogEntry::fileName)
+                .extracting(SourceFileName::value)
+                .containsExactlyInAnyOrder("file1.csv", "file2.csv");
+    }
+
+    @Test
+    void shouldReturnEmptyListWhenNoDataSources() {
+        List<SourceCatalogEntry> result = adapter.findAll();
+
+        assertThat(result).isEmpty();
     }
 }

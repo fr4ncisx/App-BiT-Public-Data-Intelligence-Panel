@@ -15,7 +15,6 @@ import com.appbit.geoanalytics.domain.source.vo.SourceFileName;
 import com.appbit.geoanalytics.domain.testing.DomainFixtures;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.csv.AntennaCsvRow;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.entity.RegionEntity;
-import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.AntennaJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.RegionJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
@@ -26,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.MappingIterator;
@@ -51,11 +51,11 @@ class IngestAntennasServiceTest {
     @Mock private DatasetObjectStoragePort storagePort;
     @Mock private DataSourcePort dataSourcePort;
     @Mock private GenericCsvReader csvReader;
-    @Mock private AntennaJpaRepository antennaRepository;
     @Mock private RegionJpaRepository regionRepository;
     @Mock private IngestionLifecycleManager lifecycleManager;
     @Mock private TransactionTemplate transactionTemplate;
     @Mock private IdGeneratorPort idGeneratorPort;
+    @Mock private JdbcTemplate jdbcTemplate;
 
     private IngestAntennasService service;
 
@@ -71,8 +71,8 @@ class IngestAntennasServiceTest {
             return callback.doInTransaction(null);
         });
         service = new IngestAntennasService(
-                storagePort, dataSourcePort, csvReader, antennaRepository, regionRepository,
-                lifecycleManager, transactionTemplate, idGeneratorPort
+                storagePort, dataSourcePort, csvReader, regionRepository,
+                lifecycleManager, transactionTemplate, idGeneratorPort, jdbcTemplate
         );
 
         mockRun = IngestionRun.builder()
@@ -101,7 +101,7 @@ class IngestAntennasServiceTest {
     }
 
     private void mockSourceIdResolution() {
-        var entry = new SourceCatalogEntry(SOURCE_ID, "Vísent CDRView", new SourceFileName("antenas_flp.csv"), DataSourceType.SYNTHETIC_DATASET, "Desc");
+        var entry = new SourceCatalogEntry(SOURCE_ID, "Vísent CDRView", new SourceFileName("antenas_flp.csv"), DataSourceType.SYNTHETIC_DATASET, "Desc", null, null, null, null);
         when(dataSourcePort.findByFileName(new SourceFileName("antenas_flp.csv"))).thenReturn(Optional.of(entry));
         when(lifecycleManager.start("antenas_flp.csv", SOURCE_ID)).thenReturn(mockRun);
     }
@@ -115,7 +115,7 @@ class IngestAntennasServiceTest {
 
         when(storagePort.openStream(TEST_KEY)).thenReturn(new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
         when(csvReader.read(any(InputStream.class), eq(AntennaCsvRow.class))).thenReturn(createStubIterator(List.of(row)));
-        when(regionRepository.findByClusterNameAndMunicipality("CBD_BEIRAMAR", "Florianopolis")).thenReturn(Optional.of(region));
+        when(regionRepository.findByRegionCode("REG_CBD_BEIRAMAR")).thenReturn(Optional.of(region));
 
         AntennaIngestResult result = service.execute(TEST_KEY);
 
@@ -148,7 +148,7 @@ class IngestAntennasServiceTest {
 
         when(storagePort.openStream(TEST_KEY)).thenReturn(new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
         when(csvReader.read(any(InputStream.class), eq(AntennaCsvRow.class))).thenReturn(createStubIterator(List.of(row1, row2)));
-        when(regionRepository.findByClusterNameAndMunicipality(anyString(), anyString())).thenReturn(Optional.of(region));
+        when(regionRepository.findByRegionCode(anyString())).thenReturn(Optional.of(region));
 
         AntennaIngestResult result = service.execute(TEST_KEY);
 
@@ -166,13 +166,12 @@ class IngestAntennasServiceTest {
 
         when(storagePort.openStream(TEST_KEY)).thenReturn(new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
         when(csvReader.read(any(InputStream.class), eq(AntennaCsvRow.class))).thenReturn(createStubIterator(List.of(row)));
-        when(regionRepository.findByClusterNameAndMunicipality("CBD_BEIRAMAR", "Florianopolis")).thenReturn(Optional.empty());
-        when(regionRepository.save(any(RegionEntity.class))).thenReturn(newRegion);
+        when(regionRepository.findByRegionCode("REG_CBD_BEIRAMAR")).thenReturn(Optional.empty(), Optional.of(newRegion));
 
         AntennaIngestResult result = service.execute(TEST_KEY);
 
         assertThat(result.rowsInserted()).isEqualTo(1);
-        verify(regionRepository).save(any(RegionEntity.class));
+        verify(regionRepository).insertIgnoreConflict(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -184,5 +183,18 @@ class IngestAntennasServiceTest {
                 .isInstanceOf(RuntimeException.class);
 
         verify(lifecycleManager).fail(eq(mockRun), any(RuntimeException.class));
+    }
+
+    @Test
+    void shouldSkipIngestionWhenAlreadyCompleted() {
+        mockSourceIdResolution();
+        when(lifecycleManager.start("antenas_flp.csv", SOURCE_ID)).thenReturn(null);
+
+        AntennaIngestResult result = service.execute(TEST_KEY);
+
+        assertThat(result.rowsRead()).isEqualTo(0);
+        assertThat(result.rowsInserted()).isEqualTo(0);
+        assertThat(result.rowsRejected()).isEqualTo(0);
+        verifyNoInteractions(storagePort);
     }
 }

@@ -1,6 +1,5 @@
 package com.appbit.geoanalytics.domain.mobility.model;
 
-import com.appbit.geoanalytics.domain.exception.IdentityRestrictionException;
 import com.appbit.geoanalytics.domain.mobility.exception.MobilityDomainException;
 import com.appbit.geoanalytics.domain.mobility.vo.FlowPercentage;
 import com.appbit.geoanalytics.domain.mobility.vo.MobilityFlowId;
