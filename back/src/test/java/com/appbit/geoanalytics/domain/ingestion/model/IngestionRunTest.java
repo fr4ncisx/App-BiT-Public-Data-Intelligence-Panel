@@ -97,12 +97,10 @@ class IngestionRunTest {
     void shouldValidateErrorMessageAgainstState() {
         assertThatThrownBy(() -> runWith(ingestionRunId(), dataSourceId(), sourceFileName(), IngestionState.FAILED, STARTED_AT, FINISHED_AT, null))
                 .isInstanceOf(IngestionDomainException.class).hasMessage("Error message is mandatory for FAILED");
-        assertThatThrownBy(() -> runWith(ingestionRunId(), dataSourceId(), sourceFileName(), IngestionState.SKIPPED, STARTED_AT, FINISHED_AT, "   "))
-                .isInstanceOf(IngestionDomainException.class).hasMessage("Error message is mandatory for SKIPPED");
         assertThatThrownBy(() -> runWith(ingestionRunId(), dataSourceId(), sourceFileName(), IngestionState.FAILED, STARTED_AT, FINISHED_AT, text(1001)))
                 .isInstanceOf(IngestionDomainException.class).hasMessage("Error message cannot exceed 1000 characters");
-        assertThatThrownBy(() -> runWith(ingestionRunId(), dataSourceId(), sourceFileName(), IngestionState.FAILED, STARTED_AT, FINISHED_AT, "fallo\ncritico"))
-                .isInstanceOf(IngestionDomainException.class).hasMessage("Error message cannot contain control characters");
+        assertThat(runWith(ingestionRunId(), dataSourceId(), sourceFileName(), IngestionState.FAILED, STARTED_AT, FINISHED_AT, "fallo\ncritico").getErrorMessage())
+                .isEqualTo("fallo critico");
     }
 
     @Test
@@ -152,26 +150,13 @@ class IngestionRunTest {
     }
 
     @Test
-    void shouldSkipRun() {
-        IngestionRun run = ingestionRun();
-
-        run.skip(FINISHED_AT, "  archivo duplicado  ");
-
-        assertThat(run.getState()).isEqualTo(IngestionState.SKIPPED);
-        assertThat(run.getFinishedAt()).isEqualTo(FINISHED_AT);
-        assertThat(run.getErrorMessage()).isEqualTo("archivo duplicado");
-    }
-
-    @Test
     void shouldRejectInvalidTerminalTransitions() {
         IngestionRun run = ingestionRun();
 
         assertThatThrownBy(() -> run.complete(null)).isInstanceOf(IngestionDomainException.class).hasMessage("Finished at cannot be null");
         assertThatThrownBy(() -> run.fail(null, "error valido")).isInstanceOf(IngestionDomainException.class).hasMessage("Finished at cannot be null");
-        assertThatThrownBy(() -> run.skip(null, "motivo valido")).isInstanceOf(IngestionDomainException.class).hasMessage("Finished at cannot be null");
         assertThatThrownBy(() -> run.complete(STARTED_AT.minusSeconds(1))).isInstanceOf(IngestionDomainException.class).hasMessage("Finished at cannot be before started at");
         assertThatThrownBy(() -> run.fail(FINISHED_AT, "   ")).isInstanceOf(IngestionDomainException.class).hasMessage("Error message is mandatory for FAILED");
-        assertThatThrownBy(() -> run.skip(FINISHED_AT, "motivo\nvalido")).isInstanceOf(IngestionDomainException.class).hasMessage("Error message cannot contain control characters");
     }
 
     @Test
@@ -184,7 +169,43 @@ class IngestionRunTest {
         assertThatThrownBy(() -> run.registerRejectedRows(1L)).isInstanceOf(IngestionDomainException.class).hasMessage("Cannot register rejected rows on finished ingestion run");
         assertThatThrownBy(() -> run.complete(FINISHED_AT.plusSeconds(1))).isInstanceOf(IngestionDomainException.class).hasMessage("Ingestion run is already finished");
         assertThatThrownBy(() -> run.fail(FINISHED_AT.plusSeconds(1), "error valido")).isInstanceOf(IngestionDomainException.class).hasMessage("Ingestion run is already finished");
-        assertThatThrownBy(() -> run.skip(FINISHED_AT.plusSeconds(1), "motivo valido")).isInstanceOf(IngestionDomainException.class).hasMessage("Ingestion run is already finished");
+    }
+
+    @Test
+    void shouldResetFinishedRunToRunning() {
+        IngestionRun run = ingestionRun();
+        run.registerReadRows(10L);
+        run.registerInsertedRows(8L);
+        run.registerRejectedRows(2L);
+        run.complete(FINISHED_AT);
+
+        var newStartedAt = Instant.parse("2026-01-16T08:00:00Z");
+        run.reset(newStartedAt);
+
+        assertThat(run.getState()).isEqualTo(IngestionState.RUNNING);
+        assertThat(run.getStartedAt()).isEqualTo(newStartedAt);
+        assertThat(run.getRowsRead()).isEqualTo(0L);
+        assertThat(run.getRowsInserted()).isEqualTo(0L);
+        assertThat(run.getRowsRejected()).isEqualTo(0L);
+        assertThat(run.getFinishedAt()).isNull();
+        assertThat(run.getErrorMessage()).isNull();
+    }
+
+    @Test
+    void shouldRejectResetOnUnfinishedRun() {
+        IngestionRun run = ingestionRun();
+
+        assertThatThrownBy(() -> run.reset(Instant.now()))
+                .isInstanceOf(IngestionDomainException.class).hasMessage("Can only reset a finished ingestion run");
+    }
+
+    @Test
+    void shouldRejectResetWithNullStartedAt() {
+        IngestionRun run = ingestionRun();
+        run.complete(FINISHED_AT);
+
+        assertThatThrownBy(() -> run.reset(null))
+                .isInstanceOf(IngestionDomainException.class).hasMessage("New started at cannot be null");
     }
 
     @Test

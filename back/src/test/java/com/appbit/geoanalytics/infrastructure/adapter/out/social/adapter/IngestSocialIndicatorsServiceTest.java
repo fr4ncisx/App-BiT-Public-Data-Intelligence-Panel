@@ -17,7 +17,6 @@ import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.Reg
 import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
 import com.appbit.geoanalytics.infrastructure.adapter.out.social.csv.SocialIndicatorCsvRow;
-import com.appbit.geoanalytics.infrastructure.adapter.out.social.repository.SocialIndicatorJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.MappingIterator;
@@ -51,11 +51,11 @@ class IngestSocialIndicatorsServiceTest {
     @Mock private DatasetObjectStoragePort storagePort;
     @Mock private DataSourcePort dataSourcePort;
     @Mock private GenericCsvReader csvReader;
-    @Mock private SocialIndicatorJpaRepository socialIndicatorRepository;
     @Mock private RegionJpaRepository regionRepository;
     @Mock private IngestionLifecycleManager lifecycleManager;
     @Mock private TransactionTemplate transactionTemplate;
     @Mock private IdGeneratorPort idGeneratorPort;
+    @Mock private JdbcTemplate jdbcTemplate;
 
     private IngestSocialIndicatorsService service;
 
@@ -72,8 +72,8 @@ class IngestSocialIndicatorsServiceTest {
             return callback.doInTransaction(null);
         });
         service = new IngestSocialIndicatorsService(
-                storagePort, dataSourcePort, csvReader, socialIndicatorRepository, regionRepository,
-                lifecycleManager, transactionTemplate, idGeneratorPort
+                storagePort, dataSourcePort, csvReader, regionRepository,
+                lifecycleManager, transactionTemplate, idGeneratorPort, jdbcTemplate
         );
 
         mockRun = IngestionRun.builder()
@@ -102,7 +102,7 @@ class IngestSocialIndicatorsServiceTest {
     }
 
     private void mockSourceIdResolution() {
-        var entry = new SourceCatalogEntry(SOURCE_ID, "Social Indicators", new SourceFileName(TEST_KEY.value()), DataSourceType.SEED_DATA, "Desc");
+        var entry = new SourceCatalogEntry(SOURCE_ID, "Social Indicators", new SourceFileName(TEST_KEY.value()), DataSourceType.SEED_DATA, "Desc", null, null, null, null);
         when(dataSourcePort.findByFileName(any())).thenReturn(Optional.of(entry));
         when(storagePort.openStream(TEST_KEY)).thenReturn(new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
         when(lifecycleManager.start(TEST_KEY.value(), SOURCE_ID)).thenReturn(mockRun);
@@ -113,7 +113,7 @@ class IngestSocialIndicatorsServiceTest {
         mockSourceIdResolution();
 
         var region = RegionEntity.builder().id(REGION_ID).build();
-        when(regionRepository.findByRegionCode("TRINDADE")).thenReturn(Optional.of(region));
+        when(regionRepository.findByRegionCode("REG_TRINDADE")).thenReturn(Optional.of(region));
 
         var row = new SocialIndicatorCsvRow("TRINDADE", "TRAINING", "0.7200", "PROGRAMS", "MEDIUM", "HIGH", "Programas de formacion");
         when(csvReader.read(any(InputStream.class), eq(SocialIndicatorCsvRow.class))).thenReturn(createStubIterator(List.of(row)));
@@ -123,12 +123,28 @@ class IngestSocialIndicatorsServiceTest {
         assertThat(result.rowsRead()).isEqualTo(1);
         assertThat(result.rowsInserted()).isEqualTo(1);
 
-        verify(socialIndicatorRepository).insertIgnoreConflict(
-                any(UUID.class), eq(REGION_ID), eq(SOURCE_ID), eq("TRAINING"),
-                eq(new BigDecimal("0.7200")), eq("PROGRAMS"), eq("MEDIUM"),
-                eq("HIGH"), eq("Programas de formacion"), any(Instant.class)
-        );
+        verify(jdbcTemplate).batchUpdate(any(String.class), any(org.springframework.jdbc.core.BatchPreparedStatementSetter.class));
         verify(lifecycleManager).complete(mockRun, 1, 1, 0);
+    }
+
+    @Test
+    void shouldCreateMissingRegionOnTheFly() {
+        mockSourceIdResolution();
+        var newRegionId = UUID.randomUUID();
+        var createdRegion = RegionEntity.builder().id(newRegionId).build();
+
+        when(regionRepository.findByRegionCode("REG_NOVO_CODIGO"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(createdRegion));
+
+        var row = new SocialIndicatorCsvRow("NOVO_CODIGO", "TRAINING", "0.7200", "PROGRAMS", "MEDIUM", "HIGH", "Programas de formacion");
+        when(csvReader.read(any(InputStream.class), eq(SocialIndicatorCsvRow.class))).thenReturn(createStubIterator(List.of(row)));
+
+        var result = service.execute(TEST_KEY);
+
+        assertThat(result.rowsRead()).isEqualTo(1);
+        assertThat(result.rowsInserted()).isEqualTo(1);
+        verify(regionRepository).insertIgnoreConflict(any(), eq("REG_NOVO_CODIGO"), eq("NOVO_CODIGO"), eq("NOVO_CODIGO"), eq("Unknown"), eq(new BigDecimal("-27.600000")), eq(new BigDecimal("-48.600000")), any());
     }
 
     @Test

@@ -21,7 +21,8 @@ class DataSourceTest {
                 "  Fuente sintetica  ",
                 new SourceFileName("  conectividad.CSV  "),
                 DataSourceType.SYNTHETIC_DATASET,
-                "  Descripcion valida de la fuente  "
+                "  Descripcion valida de la fuente  ",
+                null, null, null, null
         );
 
         assertThat(source.getSourceName()).isEqualTo("Fuente sintetica");
@@ -31,11 +32,11 @@ class DataSourceTest {
 
     @Test
     void shouldRejectNullRequiredFields() {
-        assertThatThrownBy(() -> new DataSource(null, "Fuente", sourceFileName(), DataSourceType.SYNTHETIC_DATASET, "Descripcion valida"))
+        assertThatThrownBy(() -> new DataSource(null, "Fuente", sourceFileName(), DataSourceType.SYNTHETIC_DATASET, "Descripcion valida", null, null, null, null))
                 .isInstanceOf(SourceDomainException.class).hasMessage("Data source id cannot be null");
-        assertThatThrownBy(() -> new DataSource(dataSourceId(), "Fuente", null, DataSourceType.SYNTHETIC_DATASET, "Descripcion valida"))
+        assertThatThrownBy(() -> new DataSource(dataSourceId(), "Fuente", null, DataSourceType.SYNTHETIC_DATASET, "Descripcion valida", null, null, null, null))
                 .isInstanceOf(SourceDomainException.class).hasMessage("Source file name cannot be null");
-        assertThatThrownBy(() -> new DataSource(dataSourceId(), "Fuente", sourceFileName(), null, "Descripcion valida"))
+        assertThatThrownBy(() -> new DataSource(dataSourceId(), "Fuente", sourceFileName(), null, "Descripcion valida", null, null, null, null))
                 .isInstanceOf(SourceDomainException.class).hasMessage("Data source type cannot be null");
     }
 
@@ -57,8 +58,8 @@ class DataSourceTest {
     @Test
     void shouldCompareDataSourcesByIdentity() {
         DataSourceId sameId = dataSourceId();
-        DataSource first = new DataSource(sameId, "Fuente sintetica", sourceFileName(), DataSourceType.SYNTHETIC_DATASET, "Descripcion valida de la fuente");
-        DataSource second = new DataSource(sameId, "Otra fuente", new SourceFileName("otra.csv"), DataSourceType.PUBLIC_SOURCE, "Otra descripcion valida");
+        DataSource first = new DataSource(sameId, "Fuente sintetica", sourceFileName(), DataSourceType.SYNTHETIC_DATASET, "Descripcion valida de la fuente", null, null, null, null);
+        DataSource second = new DataSource(sameId, "Otra fuente", new SourceFileName("otra.csv"), DataSourceType.PUBLIC_SOURCE, "Otra descripcion valida", null, null, null, null);
 
         assertThat(first).isEqualTo(second).hasSameHashCodeAs(second);
         assertThat(first).isNotEqualTo(dataSource());
@@ -67,7 +68,7 @@ class DataSourceTest {
     }
 
     private DataSource sourceWithTexts(String sourceName, String description) {
-        return new DataSource(dataSourceId(), sourceName, sourceFileName(), DataSourceType.SYNTHETIC_DATASET, description);
+        return new DataSource(dataSourceId(), sourceName, sourceFileName(), DataSourceType.SYNTHETIC_DATASET, description, null, null, null, null);
     }
 
     @Nested

@@ -26,10 +26,11 @@ class FindDataSourceByFileNameServiceTest {
         SourceFileName fileName = sourceFileName();
         SourceCatalogEntry expected = new SourceCatalogEntry(
                 UUID.randomUUID(),
-                "Vísent CDRView",
+                "V�sent CDRView",
                 fileName,
                 DataSourceType.SYNTHETIC_DATASET,
-                "Descripción válida de la fuente"
+                "Descripci�n v�lida de la fuente",
+                null, null, null, null
         );
 
         when(dataSourcePort.findByFileName(fileName)).thenReturn(Optional.of(expected));

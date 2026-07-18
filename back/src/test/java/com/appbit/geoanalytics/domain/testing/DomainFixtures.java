@@ -427,7 +427,8 @@ public final class DomainFixtures {
                 "Fuente sintetica",
                 sourceFileName(),
                 DataSourceType.SYNTHETIC_DATASET,
-                "Descripcion valida de la fuente"
+                "Descripcion valida de la fuente",
+                null, null, null, null
         );
     }
 }

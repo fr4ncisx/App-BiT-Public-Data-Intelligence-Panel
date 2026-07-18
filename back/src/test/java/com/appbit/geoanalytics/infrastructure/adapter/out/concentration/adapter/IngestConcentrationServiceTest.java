@@ -17,7 +17,6 @@ import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.entity.RegionE
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.AntennaJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.RegionJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.concentration.csv.ConcentrationCsvRow;
-import com.appbit.geoanalytics.infrastructure.adapter.out.concentration.repository.ConcentrationMetricJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +26,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.MappingIterator;
@@ -54,12 +54,12 @@ class IngestConcentrationServiceTest {
     @Mock private DatasetObjectStoragePort storagePort;
     @Mock private DataSourcePort dataSourcePort;
     @Mock private GenericCsvReader csvReader;
-    @Mock private ConcentrationMetricJpaRepository concentrationRepository;
     @Mock private AntennaJpaRepository antennaRepository;
     @Mock private RegionJpaRepository regionRepository;
     @Mock private IngestionLifecycleManager lifecycleManager;
     @Mock private TransactionTemplate transactionTemplate;
     @Mock private IdGeneratorPort idGeneratorPort;
+    @Mock private JdbcTemplate jdbcTemplate;
 
     private IngestConcentrationService service;
 
@@ -77,8 +77,8 @@ class IngestConcentrationServiceTest {
         });
         service = new IngestConcentrationService(
                 storagePort, dataSourcePort, csvReader,
-                concentrationRepository, antennaRepository, regionRepository,
-                lifecycleManager, transactionTemplate, idGeneratorPort
+                antennaRepository, regionRepository,
+                lifecycleManager, transactionTemplate, idGeneratorPort, jdbcTemplate
         );
 
         mockRun = IngestionRun.builder()
@@ -107,7 +107,7 @@ class IngestConcentrationServiceTest {
     }
 
     private void mockSourceIdResolution() {
-        var entry = new SourceCatalogEntry(SOURCE_ID, "Concentration", new SourceFileName("tensor_concentracao.csv"), DataSourceType.SYNTHETIC_DATASET, "Desc");
+        var entry = new SourceCatalogEntry(SOURCE_ID, "Concentration", new SourceFileName("tensor_concentracao.csv"), DataSourceType.SYNTHETIC_DATASET, "Desc", null, null, null, null);
         when(dataSourcePort.findByFileName(any())).thenReturn(Optional.of(entry));
         when(storagePort.openStream(TEST_KEY)).thenReturn(new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
         when(lifecycleManager.start("tensor_concentracao.csv", SOURCE_ID)).thenReturn(mockRun);
@@ -130,7 +130,7 @@ class IngestConcentrationServiceTest {
 
         when(csvReader.read(any(InputStream.class), eq(ConcentrationCsvRow.class))).thenReturn(createStubIterator(List.of(row)));
         when(antennaRepository.findAllEcgis()).thenReturn(Set.of("1234567890123"));
-        when(regionRepository.findByClusterNameAndMunicipality("CBD_BEIRAMAR", "Florianopolis")).thenReturn(Optional.of(region));
+        when(regionRepository.findByClusterName("CBD_BEIRAMAR")).thenReturn(Optional.of(region));
 
         IngestConcentrationResult result = service.execute(TEST_KEY);
 
@@ -149,7 +149,7 @@ class IngestConcentrationServiceTest {
 
         when(csvReader.read(any(InputStream.class), eq(ConcentrationCsvRow.class))).thenReturn(createStubIterator(List.of(row1, row2)));
         when(antennaRepository.findAllEcgis()).thenReturn(Set.of("1234567890123"));
-        when(regionRepository.findByClusterNameAndMunicipality("CBD_BEIRAMAR", "Florianopolis")).thenReturn(Optional.of(region));
+        when(regionRepository.findByClusterName("CBD_BEIRAMAR")).thenReturn(Optional.of(region));
 
         IngestConcentrationResult result = service.execute(TEST_KEY);
 
