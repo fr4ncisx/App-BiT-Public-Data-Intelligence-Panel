@@ -4,25 +4,49 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 5000
+      idle-timeout: 300000
+      max-lifetime: 600000
+      leak-detection-threshold: 10000
   jpa:
     properties:
       hibernate:
         jdbc:
           batch_size: 25
+          fetch_size: 50
         order_inserts: true
         order_updates: true
         default_batch_fetch_size: 25
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+server:
+  shutdown: graceful
 
 management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health, prometheus, metrics
   endpoint:
     health:
       show-details: never
       probes:
         enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  structured:
+    json:
+      enabled: true
 
 springdoc:
   api-docs:

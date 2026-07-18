@@ -1,7 +1,8 @@
 package com.appbit.geoanalytics.application.storage.exception;
 
+import com.appbit.geoanalytics.application.exception.ApplicationException;
 import lombok.experimental.StandardException;
 
 @StandardException
-public class DatasetObjectStorageCredentialsException extends RuntimeException {
+public class DatasetObjectStorageCredentialsException extends ApplicationException {
 }
