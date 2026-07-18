@@ -4,14 +4,13 @@ public enum IngestionState {
     PENDING,
     RUNNING,
     COMPLETED,
-    FAILED,
-    SKIPPED;
+    FAILED;
 
     public boolean isFinished() {
-        return this == COMPLETED || this == FAILED || this == SKIPPED;
+        return this == COMPLETED || this == FAILED;
     }
 
     public boolean requiresErrorMessage() {
-        return this == FAILED || this == SKIPPED;
+        return this == FAILED;
     }
 }

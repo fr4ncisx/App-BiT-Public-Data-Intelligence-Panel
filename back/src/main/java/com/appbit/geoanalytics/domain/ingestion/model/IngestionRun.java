@@ -17,8 +17,8 @@ public final class IngestionRun {
     private final IngestionRunId id;
     private final DataSourceId sourceId;
     private final SourceFileName fileName;
-    private final Instant startedAt;
 
+    private Instant startedAt;
     private IngestionState state;
     private long rowsRead;
     private long rowsInserted;
@@ -149,21 +149,22 @@ public final class IngestionRun {
         this.errorMessage = normalizeErrorMessage(errorMessage);
     }
 
-    public void skip(Instant finishedAt, String reason) {
-        if (state.isFinished()) {
-            throw new IngestionDomainException("Ingestion run is already finished");
+    public void reset(Instant newStartedAt) {
+        if (!state.isFinished()) {
+            throw new IngestionDomainException("Can only reset a finished ingestion run");
         }
 
-        if (finishedAt == null) {
-            throw new IngestionDomainException("Finished at cannot be null");
+        if (newStartedAt == null) {
+            throw new IngestionDomainException("New started at cannot be null");
         }
 
-        validateFinishedAt(this.startedAt, finishedAt, IngestionState.SKIPPED);
-        validateErrorMessage(reason, IngestionState.SKIPPED);
-
-        this.state = IngestionState.SKIPPED;
-        this.finishedAt = finishedAt;
-        this.errorMessage = normalizeErrorMessage(reason);
+        this.state = IngestionState.RUNNING;
+        this.startedAt = newStartedAt;
+        this.rowsRead = 0;
+        this.rowsInserted = 0;
+        this.rowsRejected = 0;
+        this.finishedAt = null;
+        this.errorMessage = null;
     }
 
     private void validateCounters(long rowsRead, long rowsInserted, long rowsRejected) {
@@ -212,10 +213,6 @@ public final class IngestionRun {
         if (!normalized.isBlank() && normalized.length() > 1000) {
             throw new IngestionDomainException("Error message cannot exceed 1000 characters");
         }
-
-        if (!normalized.isBlank() && normalized.chars().anyMatch(Character::isISOControl)) {
-            throw new IngestionDomainException("Error message cannot contain control characters");
-        }
     }
 
     private void validatePositiveAmount(long amount, String fieldName) {
@@ -225,7 +222,8 @@ public final class IngestionRun {
     }
 
     private String normalizeErrorMessage(@Nullable String errorMessage) {
-        return errorMessage == null ? "" : errorMessage.trim();
+        if (errorMessage == null) return "";
+        return errorMessage.replaceAll("[\\p{Cc}]", " ").trim();
     }
 
     @Override
