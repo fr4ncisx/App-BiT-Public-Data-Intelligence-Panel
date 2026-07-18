@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -18,6 +19,15 @@ public interface ConcentrationMetricJpaRepository extends JpaRepository<Concentr
 
     @Query("SELECT DISTINCT c.ecgi FROM ConcentrationMetricEntity c")
     Set<String> findAllDistinctEcgis();
+
+    @Query("SELECT DISTINCT c.period FROM ConcentrationMetricEntity c ORDER BY c.period")
+    List<String> findDistinctPeriods();
+
+    @Query("SELECT c.regionId, SUM(c.activeUsers), AVG(c.averageCongestion) FROM ConcentrationMetricEntity c WHERE c.regionId IN :regionIds GROUP BY c.regionId")
+    List<Object[]> findConcentrationAggregateByRegionIds(@Param("regionIds") List<UUID> regionIds);
+
+    @Query("SELECT c.regionId, SUM(c.activeUsers), AVG(c.averageCongestion) FROM ConcentrationMetricEntity c WHERE c.regionId IN :regionIds AND c.period = :period GROUP BY c.regionId")
+    List<Object[]> findConcentrationAggregateByRegionIdsAndPeriod(@Param("regionIds") List<UUID> regionIds, @Param("period") String period);
 
     @Modifying
     @Query(value = """
