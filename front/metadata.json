@@ -1,0 +1,6 @@
+{
+  "name": "BiT.Intelligence",
+  "description": "Plataforma de análisis territorial y brechas socio-digitales en Florianópolis conectada a su backend externo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
