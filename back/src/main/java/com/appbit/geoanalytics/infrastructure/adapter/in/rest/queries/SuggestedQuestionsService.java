@@ -51,6 +51,11 @@ public class SuggestedQuestionsService {
         try {
             var chatClient = chatClientBuilder.build();
             var content = chatClient.prompt()
+                    .system("""
+                            Eres un generador de preguntas para un panel de inteligencia territorial.
+                            Solo genera las 4 preguntas. No expliques nada. No uses markdown.
+                            Responde SOLO con el formato exacto solicitado.
+                            """)
                     .user("""
                             Genera 4 preguntas sugeridas en español para un panel de inteligencia territorial sobre Florianópolis, Brasil.
 
