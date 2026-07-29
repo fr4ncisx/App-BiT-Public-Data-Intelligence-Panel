@@ -1,5 +1,6 @@
 package com.appbit.geoanalytics.application.ai.in;
 
+import com.appbit.geoanalytics.application.ai.AIResponse;
 import com.appbit.geoanalytics.application.ai.AIResponseDTO;
 import com.appbit.geoanalytics.application.ai.EvidenceContext;
 import com.appbit.geoanalytics.application.ai.IndicatorEvidenceDTO;
@@ -13,7 +14,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.ai.chat.client.ChatClient;
 
 import java.util.List;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 @Slf4j
@@ -31,188 +31,171 @@ public class GenerateAIAnswerService implements GenerateAIAnswerUseCase {
             return insufficientEvidenceResponse(lang);
         }
 
-        var prompt = buildPrompt(evidence, intent, lang);
+        var systemPrompt = buildSystemPrompt(lang);
+        var userPrompt = buildUserPrompt(evidence, intent);
 
         try {
             var chatClient = chatClientBuilder.build();
-            var content = chatClient.prompt()
-                    .user(prompt)
+            var aiResponse = chatClient.prompt()
+                    .system(systemPrompt)
+                    .user(userPrompt)
                     .call()
-                    .content();
+                    .entity(AIResponse.class, spec -> spec
+                            .useProviderStructuredOutput()
+                            .validateSchema());
 
-            return parseResponse(content, evidence, lang);
+            if (aiResponse == null) {
+                log.warn("Gemini returned null — returning fallback response");
+                return fallbackResponse(evidence, lang);
+            }
+
+            return toDTO(aiResponse, evidence, lang);
         } catch (Exception e) {
             log.error("Gemini API call failed — returning fallback response: {}", e.getMessage());
             return fallbackResponse(evidence, lang);
         }
     }
 
-    private String buildPrompt(EvidenceContext evidence, AiIntent intent, Language lang) {
+    private String buildSystemPrompt(Language lang) {
         return switch (lang) {
             case EN -> """
-                    You are a territorial analysis assistant. Your role is to answer questions about regional data.
-                    
+                    You are a territorial data analyst for Florianopolis, Brazil.
+                    You answer questions about regional data using ONLY the provided evidence.
+
                     RULES:
-                    - Do NOT make up data. Use ONLY the provided evidence.
-                    - Do not add external information.
-                    - If there is insufficient data, clearly state the limitation.
-                    
-                    DETECTED INTENT: %s
-                    
-                    AVAILABLE EVIDENCE:
-                    Regions: %s
-                    Indicators: %s
-                    Sources: %s
-                    Warnings: %s
-                    
-                    Answer EXACTLY in this format, with no markdown, no bold, no extra text:
-                    
-                    SUMMARY: <brief summary 1-2 sentences>
-                    EXPLANATION: <detailed explanation based on the data>
-                    SUGGESTED_VISUALIZATION: MAP|TABLE|RANKING|FLOW|NONE
-                    """.formatted(
-                    intent.name(),
-                    formatRegions(evidence.regions()),
-                    formatIndicators(evidence.indicators()),
-                    String.join(", ", evidence.sources()),
-                    formatWarnings(evidence.warnings())
-            );
+                    - Do NOT fabricate data. Reference only explicit evidence.
+                    - Do not add external information not present in the evidence.
+                    - If evidence is insufficient, clearly state the limitation.
+                    - Round numbers to integers or max 1 decimal (e.g., 85 not 0.8542).
+                    - Avoid jargon. Explain like an analyst briefing a city manager.
+                    - Maximum 3 sentences in EXPLANATION.
+                    - No markdown, no bold, no filler phrases.
+                    - Always respond in the SAME language as the user question.
+
+                    OUTPUT FORMAT (respond with EXACTLY these 3 fields):
+                    summary: 1-2 sentence summary of findings
+                    explanation: Data-driven explanation with rounded numbers, max 3 sentences
+                    suggestedVisualization: One of MAP, TABLE, RANKING, FLOW, or NONE
+                    """;
             case PT -> """
-                    Você é um assistente de análise territorial. Sua função é responder perguntas sobre dados regionais.
-                    
+                    Voce e um analista de dados territoriais para Florianopolis, Brasil.
+                    Voce responde perguntas sobre dados regionais usando SOMENTE as evidencias fornecidas.
+
                     REGRAS:
-                    - NÃO invente dados. Use APENAS as evidências fornecidas.
-                    - Não adicione informações externas.
-                    - Se não houver dados suficientes, indique claramente a limitação.
-                    
-                    INTENÇÃO DETECTADA: %s
-                    
-                    EVIDÊNCIAS DISPONÍVEIS:
-                    Regiões: %s
-                    Indicadores: %s
-                    Fontes: %s
-                    Avisos: %s
-                    
-                    Responda EXATAMENTE neste formato, sem markdown, sem negrito, sem texto extra:
-                    
-                    SUMMARY: <resumo breve 1-2 frases>
-                    EXPLANATION: <explicação detalhada baseada nos dados>
-                    SUGGESTED_VISUALIZATION: MAP|TABLE|RANKING|FLOW|NONE
-                    """.formatted(
-                    intent.name(),
-                    formatRegions(evidence.regions()),
-                    formatIndicators(evidence.indicators()),
-                    String.join(", ", evidence.sources()),
-                    formatWarnings(evidence.warnings())
-            );
+                    - NAO invente dados. Referencie apenas evidencias explicitas.
+                    - NAO adicione informacoes externas nao presentes nas evidencias.
+                    - Se as evidencias forem insuficientes, indique claramente a limitacao.
+                    - Arredondne numeros para inteiros ou maximo 1 decimal (ex: 85 nao 0.8542).
+                    - Evite jargao. Explique como um analista que presenta a um gerente.
+                    - Maximo 3 frases em EXPLANATION.
+                    - Sem markdown, sem negrito, sem frases de efeito.
+                    - Responda SEMPRE no MESMO idioma da pergunta do usuario.
+
+                    FORMATO DE SAIDA (responda com EXATAMENTE estes 3 campos):
+                    summary: Resumo de 1-2 frases dos resultados
+                    explanation: Explicacao baseada nos dados com numeros arredondados, maximo 3 frases
+                    suggestedVisualization: Um de MAP, TABLE, RANKING, FLOW ou NONE
+                    """;
             default -> """
-                    Eres un asistente de análisis territorial. Tu función es responder preguntas sobre datos regionales.
-                    
+                    Eres un analista de datos territoriales para Florianopolis, Brasil.
+                    Respondes preguntas sobre datos regionales usando SOLO la evidencia proporcionada.
+
                     REGLAS:
-                    - NO inventes datos. Usa SOLO la evidencia proporcionada.
-                    - No agregues información externa.
-                    - Si no hay datos suficientes, indica claramente la limitación.
-                    - Presenta números redondeados como enteros o con máximo 1 decimal. Ej: 85%% no 0.8542, 60.4 no 60.428571.
-                    - Evita jerga técnica. Habla como un analista que explica a un gerente.
-                    - Sé específico pero conciso. Máximo 3 oraciones en EXPLANATION.
-                    - Usa lenguaje claro y directo. Evita muletillas como "en este contexto" o "es importante señalar".
-                    
-                    INTENCIÓN DETECTADA: %s
-                    
-                    EVIDENCIA DISPONIBLE:
-                    Regiones: %s
-                    Indicadores: %s
-                    Fuentes: %s
-                    Advertencias: %s
-                    
-                    Responde EXACTAMENTE en este formato, sin markdown, sin negritas, sin texto extra:
-                    
-                    SUMMARY: <resumen breve 1-2 oraciones, claro y directo>
-                    EXPLANATION: <explicación detallada basada en los datos, con números redondeados y lenguaje claro>
-                    SUGGESTED_VISUALIZATION: MAP|TABLE|RANKING|FLOW|NONE
-                    """.formatted(
-                        intent.name(),
-                        formatRegions(evidence.regions()),
-                        formatIndicators(evidence.indicators()),
-                        String.join(", ", evidence.sources()),
-                        formatWarnings(evidence.warnings())
-                );
-    };
+                    - NO inventes datos. Referencia solo evidencia explicita.
+                    - No agregues informacion externa no presente en la evidencia.
+                    - Si la evidencia es insuficiente, indica claramente la limitacion.
+                    - Redondea numeros a enteros o maximo 1 decimal (ej: 85 no 0.8542).
+                    - Evita jerga. Explica como un analista que presenta a un gerente.
+                    - Maximo 3 oraciones en EXPLANATION.
+                    - Sin markdown, sin negritas, sin frases de relleno.
+                    - Responde SIEMPRE en el MISMO idioma de la pregunta del usuario.
+
+                    FORMATO DE SALIDA (responde con EXACTAMENTE estos 3 campos):
+                    summary: Resumen de 1-2 oraciones de los hallazgos
+                    explanation: Explicacion basada en datos con numeros redondeados, maximo 3 oraciones
+                    suggestedVisualization: Uno de MAP, TABLE, RANKING, FLOW o NONE
+                    """;
+        };
+    }
+
+    private String buildUserPrompt(EvidenceContext evidence, AiIntent intent) {
+        return """
+                DETECTED INTENT: %s
+
+                EVIDENCE:
+                Regions: %s
+                Indicators: %s
+                Sources: %s
+                Warnings: %s
+                """.formatted(
+                intent.name(),
+                formatRegions(evidence.regions()),
+                formatIndicators(evidence.indicators()),
+                String.join(", ", evidence.sources()),
+                formatWarnings(evidence.warnings())
+        );
     }
 
     private String formatRegions(List<RegionEvidenceDTO> regions) {
-        if (regions.isEmpty()) return "Ninguna";
+        if (regions.isEmpty()) return "None";
         return String.join("; ", regions.stream()
                 .map(r -> r.regionCode() + " - " + r.regionName())
                 .toList());
     }
 
     private String formatIndicators(List<IndicatorEvidenceDTO> indicators) {
-        if (indicators.isEmpty()) return "Ninguno";
+        if (indicators.isEmpty()) return "None";
         return String.join("; ", indicators.stream()
                 .map(i -> i.indicatorType() + "=" + i.value() + " " + i.unit())
                 .toList());
     }
 
     private String formatWarnings(List<WarningDTO> warnings) {
-        if (warnings.isEmpty()) return "Ninguna";
-        var parts = warnings.stream()
+        if (warnings.isEmpty()) return "None";
+        return String.join("; ", warnings.stream()
                 .map(w -> w.type() + ": " + w.message())
-                .toList();
-        return String.join("; ", parts);
+                .toList());
     }
 
-    private AIResponseDTO parseResponse(String content, EvidenceContext evidence, Language lang) {
-        var summary = extractField(content, "SUMMARY");
-        var explanation = extractField(content, "EXPLANATION");
-        var visualization = extractField(content, "SUGGESTED_VISUALIZATION");
-
+    private AIResponseDTO toDTO(AIResponse response, EvidenceContext evidence, Language lang) {
         return new AIResponseDTO(
-                summary != null ? summary : localizedMessage(lang, "No se pudo generar un resumen.", "Could not generate summary.", "Não foi possível gerar um resumo."),
-                explanation != null ? explanation : localizedMessage(lang, "No se pudo generar una explicación.", "Could not generate an explanation.", "Não foi possível gerar uma explicação."),
+                response.summary() != null ? response.summary() :
+                        localizedMessage(lang, "No se pudo generar un resumen.", "Could not generate summary.", "Nao foi possivel gerar um resumo."),
+                response.explanation() != null ? response.explanation() :
+                        localizedMessage(lang, "No se pudo generar una explicacion.", "Could not generate an explanation.", "Nao foi possivel gerar uma explicacao."),
                 evidence.indicators(),
                 evidence.regions(),
                 evidence.sources(),
                 evidence.warnings(),
-                visualization != null ? visualization : "NONE"
+                response.suggestedVisualization() != null ? response.suggestedVisualization() : "NONE"
         );
-    }
-
-    private static String extractField(String content, String field) {
-        var escaped = Pattern.quote(field);
-        var pattern = Pattern.compile(
-                "(?:[*_]{1,2})?" + escaped + "\\s*:\\s*(.*?)(?:\\n|$)",
-                Pattern.CASE_INSENSITIVE | Pattern.DOTALL
-        );
-        var matcher = pattern.matcher(content);
-        return matcher.find() ? matcher.group(1).strip() : null;
     }
 
     private AIResponseDTO insufficientEvidenceResponse(Language lang) {
         var title = localizedMessage(lang,
                 "No hay datos suficientes para responder la consulta.",
                 "There is not enough data to answer the query.",
-                "Não há dados suficientes para responder à consulta.");
+                "Nao ha dados suficientes para responder a consulta.");
         var detail = localizedMessage(lang,
-                "Los filtros seleccionados no coinciden con datos disponibles en la base de datos. Intente con una región, indicador o período diferente.",
+                "Los filtros seleccionados no coinciden con datos disponibles en la base de datos. Intente con una region, indicador o periodo diferente.",
                 "The selected filters do not match any data in the database. Try a different region, indicator, or period.",
-                "Os filtros selecionados não correspondem a dados disponíveis no banco de dados. Tente uma região, indicador ou período diferente.");
+                "Os filtros selecionados nao correspondem a dados disponiveis no banco de dados. Tente uma regiao, indicador ou periodo diferente.");
         var warning = new WarningDTO("INFO", localizedMessage(lang,
                 "No hay datos disponibles para los filtros seleccionados.",
                 "No data available for the selected filters.",
-                "Não há dados disponíveis para os filtros selecionados."));
+                "Nao ha dados disponiveis para os filtros selecionados."));
         return new AIResponseDTO(title, detail, List.of(), List.of(), List.of(), List.of(warning), "NONE");
     }
 
     private AIResponseDTO fallbackResponse(EvidenceContext evidence, Language lang) {
         var title = localizedMessage(lang,
-                "El servicio de inteligencia artificial no está disponible en este momento.",
+                "El servicio de inteligencia artificial no esta disponible en este momento.",
                 "The artificial intelligence service is currently unavailable.",
-                "O serviço de inteligência artificial não está disponível no momento.");
+                "O servico de inteligencia artificial nao esta disponivel no momento.");
         var detail = localizedMessage(lang,
-                "No fue posible generar una respuesta con IA debido a una falla temporal del servicio. Los datos recopilados se muestran a continuación para referencia. Intente nuevamente más tarde.",
+                "No fue posible generar una respuesta con IA debido a una falla temporal del servicio. Los datos recopilados se muestran a continuacion para referencia. Intente nuevamente mas tarde.",
                 "Could not generate an AI response due to a temporary service failure. The collected data is shown below for reference. Please try again later.",
-                "Não foi possível gerar uma resposta com IA devido a uma falha temporária do serviço. Os dados coletados são mostrados abaixo para referência. Tente novamente mais tarde.");
+                "Nao foi possivel gerar uma resposta com IA devido a uma falha temporaria do servico. Os dados coletados sao mostrados abaixo para referencia. Tente novamente mais tarde.");
         return new AIResponseDTO(
                 title, detail,
                 evidence.indicators(),
@@ -226,9 +209,9 @@ public class GenerateAIAnswerService implements GenerateAIAnswerUseCase {
     private List<WarningDTO> prependFallbackWarning(List<WarningDTO> existing, Language lang) {
         return Stream.concat(
                 Stream.of(new WarningDTO("WARNING", localizedMessage(lang,
-                        "El servicio de IA no está disponible. Datos mostrados sin análisis.",
+                        "El servicio de IA no esta disponible. Datos mostrados sin analisis.",
                         "AI service unavailable. Data shown without analysis.",
-                        "Serviço de IA indisponível. Dados mostrados sem análise."))),
+                        "Servico de IA indisponivel. Dados mostrados sem analise."))),
                 existing.stream()
         ).toList();
     }
