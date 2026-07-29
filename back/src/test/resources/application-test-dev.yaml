@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:geoanalytics_test_ai;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    url: jdbc:h2:mem:geoanalytics_test_dev;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
@@ -18,7 +18,7 @@ spring:
         api-key: ${SPRING_AI_GOOGLE_GENAI_API_KEY:test-key}
         chat:
           model: gemini-3.1-flash-lite
-          thinking-level: MINIMAL
+          thinking-level: LOW
           options:
             temperature: 0.3
             max-output-tokens: 500
@@ -30,7 +30,7 @@ spring:
 appbit:
   api:
     cors:
-      allowed-origins: "https://mock-server.com"
+      allowed-origins: "http://localhost:3000"
   storage:
     r2:
       endpoint: ${APPBIT_STORAGE_R2_ENDPOINT:http://localhost:9000}
