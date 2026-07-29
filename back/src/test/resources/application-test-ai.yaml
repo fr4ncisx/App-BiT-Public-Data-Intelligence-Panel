@@ -1,0 +1,40 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:geoanalytics_test_ai;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+  sql:
+    init:
+      mode: never
+  ai:
+    google:
+      genai:
+        api-key: ${GOOGLE_API_KEY:test-key}
+        chat:
+          model: gemini-3.1-flash-lite
+          options:
+            temperature: 0.3
+            max-output-tokens: 500
+    chat:
+      client:
+        enabled: true
+  flyway:
+    enabled: false
+appbit:
+  api:
+    cors:
+      allowed-origins: "https://mock-server.com"
+  storage:
+    r2:
+      endpoint: ${APPBIT_STORAGE_R2_ENDPOINT:http://localhost:9000}
+      access-key-id: ${APPBIT_STORAGE_R2_ACCESS_KEY_ID:appbit_admin}
+      secret-access-key: ${APPBIT_STORAGE_R2_SECRET_ACCESS_KEY:appbit_admin}
+      bucket-name: ${APPBIT_STORAGE_R2_BUCKET_NAME:appbit-datasets}
+      region: ${APPBIT_STORAGE_R2_REGION:auto}
+      csv-prefix: ${APPBIT_STORAGE_R2_CSV_PREFIX:raw/visent-cdrview}
