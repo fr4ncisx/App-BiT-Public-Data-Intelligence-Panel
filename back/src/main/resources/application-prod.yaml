@@ -22,6 +22,14 @@ spring:
         default_batch_fetch_size: 25
   lifecycle:
     timeout-per-shutdown-phase: 30s
+  ai:
+    google:
+      genai:
+        chat:
+          model: gemini-3.5-flash
+          thinking-level: MEDIUM
+          options:
+            max-output-tokens: 2048
 
 server:
   shutdown: graceful

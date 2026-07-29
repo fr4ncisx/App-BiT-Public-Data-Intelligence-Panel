@@ -5,6 +5,10 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:admin}
   config:
     import: optional:file:./.env[.properties]
+  ai:
+    chat:
+      client:
+        enabled: true
   jpa:
     properties:
       hibernate:
