@@ -7,6 +7,7 @@ import com.appbit.geoanalytics.domain.ai.enums.AiIntent;
 import com.appbit.geoanalytics.domain.ai.enums.Language;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,6 +19,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@Tag("live")
 class GenerateAIAnswerServiceLiveTest {
 
     private static EvidenceContext populationEvidence() {
