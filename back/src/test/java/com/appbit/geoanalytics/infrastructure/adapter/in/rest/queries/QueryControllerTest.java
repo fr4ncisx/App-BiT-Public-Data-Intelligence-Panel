@@ -3,11 +3,15 @@ package com.appbit.geoanalytics.infrastructure.adapter.in.rest.queries;
 import com.appbit.geoanalytics.application.ai.AIResponseDTO;
 import com.appbit.geoanalytics.application.ai.EvidenceContext;
 import com.appbit.geoanalytics.application.ai.IndicatorEvidenceDTO;
+import com.appbit.geoanalytics.application.ai.QueryRequest;
 import com.appbit.geoanalytics.application.ai.RegionEvidenceDTO;
 import com.appbit.geoanalytics.application.ai.in.AuditQueryUseCase;
 import com.appbit.geoanalytics.application.ai.in.ClassifyIntentUseCase;
 import com.appbit.geoanalytics.application.ai.in.GenerateAIAnswerUseCase;
 import com.appbit.geoanalytics.application.ai.in.RetrieveEvidenceUseCase;
+import com.appbit.geoanalytics.application.exception.ApplicationException;
+import com.appbit.geoanalytics.domain.ai.enums.Language;
+import com.appbit.geoanalytics.domain.exception.DomainException;
 import com.appbit.geoanalytics.infrastructure.adapter.in.rest.advice.GlobalExceptionHandler;
 import com.appbit.geoanalytics.infrastructure.adapter.in.rest.code.ApiResponseCode;
 import com.appbit.geoanalytics.infrastructure.adapter.in.rest.correlation.RequestContext;
@@ -32,6 +36,7 @@ import static com.appbit.geoanalytics.domain.ai.enums.AiIntent.UNKNOWN;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -95,6 +100,14 @@ class QueryControllerTest {
                 .andExpect(jsonPath("$.data.summary").value("Summary"))
                 .andExpect(jsonPath("$.data.suggestedVisualization").value("MAP"))
                 .andExpect(jsonPath("$.errors").isEmpty());
+
+        verify(auditQueryUseCase).execute(
+                new QueryRequest("concentración poblacional", null, null, null, null),
+                POPULATION_CONCENTRATION,
+                aiResponse,
+                "test-req-id",
+                "PROCESSED"
+        );
     }
 
     @Test
@@ -138,5 +151,76 @@ class QueryControllerTest {
                 .andExpect(jsonPath("$.code").value(ApiResponseCode.INSUFFICIENT_EVIDENCE.name()))
                 .andExpect(jsonPath("$.data.summary").value("No hay datos"))
                 .andExpect(jsonPath("$.errors").isEmpty());
+
+        verify(auditQueryUseCase).execute(
+                new QueryRequest("consulta sin datos", null, null, null, null),
+                UNKNOWN,
+                aiResponse,
+                "test-req-id",
+                "INSUFFICIENT_EVIDENCE"
+        );
+    }
+
+    @Test
+    void returns200WithUppercasedLanguage() throws Exception {
+        var evidence = EvidenceContext.empty();
+        var aiResponse = new AIResponseDTO("Respuesta", "Explicación",
+                List.of(), List.of(), List.of(), List.of(), "NONE");
+
+        when(classifyIntentUseCase.execute("hola")).thenReturn(UNKNOWN);
+        when(retrieveEvidenceUseCase.execute(eq(UNKNOWN), any(), any(), any()))
+                .thenReturn(evidence);
+        when(generateAIAnswerUseCase.execute(eq(evidence), eq(UNKNOWN), eq(Language.PT))).thenReturn(aiResponse);
+
+        mockMvc.perform(post("/api/v1/data/queries")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"query\":\"hola\",\"language\":\"pt\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void returns200WithInvalidLanguageFallingBackToNull() throws Exception {
+        var evidence = EvidenceContext.empty();
+        var aiResponse = new AIResponseDTO("Respuesta", "Explicación",
+                List.of(), List.of(), List.of(), List.of(), "NONE");
+
+        when(classifyIntentUseCase.execute("hola")).thenReturn(UNKNOWN);
+        when(retrieveEvidenceUseCase.execute(eq(UNKNOWN), any(), any(), any()))
+                .thenReturn(evidence);
+        when(generateAIAnswerUseCase.execute(eq(evidence), eq(UNKNOWN), isNull())).thenReturn(aiResponse);
+
+        mockMvc.perform(post("/api/v1/data/queries")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"query\":\"hola\",\"language\":\"xx\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void propagatesDomainExceptionAsBadRequest() throws Exception {
+        when(classifyIntentUseCase.execute("dominio"))
+                .thenThrow(new DomainException("No se puede procesar") {
+                });
+
+        mockMvc.perform(post("/api/v1/data/queries")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"query\":\"dominio\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value(ApiResponseCode.VALIDATION_ERROR.name()));
+    }
+
+    @Test
+    void propagatesApplicationExceptionAsServiceUnavailable() throws Exception {
+        when(classifyIntentUseCase.execute("ia caída"))
+                .thenThrow(new ApplicationException("AI provider unreachable"));
+
+        mockMvc.perform(post("/api/v1/data/queries")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"query\":\"ia caída\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value(ApiResponseCode.AI_SERVICE_UNAVAILABLE.name()));
     }
 }
