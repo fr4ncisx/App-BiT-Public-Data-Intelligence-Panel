@@ -19,9 +19,8 @@ spring:
         chat:
           model: gemini-3.1-flash-lite
           thinking-level: LOW
-          options:
-            temperature: 0.3
-            max-output-tokens: 500
+          temperature: 0.3
+          max-output-tokens: 500
     chat:
       client:
         enabled: true
