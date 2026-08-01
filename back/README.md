@@ -346,5 +346,24 @@ Run these checks before handing off backend changes:
 docker compose -f compose.yaml config --quiet
 ```
 
+Full quality gate (unit + integration tests, unused-import check, coverage report):
+
+```powershell
+.\mvnw.cmd -q verify
+```
+
+The coverage report is generated at `target/site/jacoco/index.html`.
+
+Live tests (real Gemini API calls) are excluded from the default test run.
+Run them manually with a configured `SPRING_AI_GOOGLE_GENAI_API_KEY`:
+
+```powershell
+.\mvnw.cmd -q test -Dgroups=live "-Dexcluded.groups="
+```
+
+GitHub Actions runs `mvn verify` on every pull request to `main`/`develop`
+(`back-ci-cd.yml`) and the storage integration tests against a MinIO service
+container (`back-storage-tests.yml`).
+
 For Flyway or SQL changes, validate against PostgreSQL. The default test profile
 uses H2 and does not replace PostgreSQL migration testing.
