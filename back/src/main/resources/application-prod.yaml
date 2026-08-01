@@ -28,8 +28,7 @@ spring:
         chat:
           model: gemini-3.5-flash
           thinking-level: MEDIUM
-          options:
-            max-output-tokens: 2048
+          max-output-tokens: 2048
 
 server:
   shutdown: graceful
@@ -44,17 +43,15 @@ management:
       show-details: never
       probes:
         enabled: true
-    prometheus:
-      enabled: true
-  metrics:
-    export:
-      prometheus:
+  prometheus:
+    metrics:
+      export:
         enabled: true
 
 logging:
   structured:
-    json:
-      enabled: true
+    format:
+      console: logstash
 
 springdoc:
   api-docs:
