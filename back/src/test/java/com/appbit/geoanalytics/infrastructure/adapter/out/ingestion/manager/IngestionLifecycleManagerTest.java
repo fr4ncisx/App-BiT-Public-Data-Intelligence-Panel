@@ -57,12 +57,16 @@ class IngestionLifecycleManagerTest {
     }
 
     private IngestionRun createRun(IngestionState state, Instant finishedAt) {
+        Instant startedAt = Instant.now();
+        if (finishedAt != null && finishedAt.isBefore(startedAt)) {
+            finishedAt = startedAt;
+        }
         return IngestionRun.builder()
                 .id(new IngestionRunId(RUN_ID))
                 .sourceId(new DataSourceId(SOURCE_ID))
                 .fileName(new SourceFileName(FILE_NAME))
                 .state(state)
-                .startedAt(Instant.now())
+                .startedAt(startedAt)
                 .finishedAt(finishedAt)
                 .errorMessage(state == IngestionState.FAILED ? "Previous failure" : null)
                 .build();
