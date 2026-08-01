@@ -182,6 +182,7 @@ class GenerateAIAnswerServiceTest {
 
         assertThat(result.data()).hasSize(1);
         assertThat(result.data().getFirst().indicatorType()).isEqualTo("POPULATION_CONCENTRATION");
+        assertThat(result.data().getFirst().value()).isEqualByComparingTo(BigDecimal.valueOf(5000));
         assertThat(result.regions()).hasSize(1);
         assertThat(result.regions().getFirst().regionCode()).isEqualTo("REG_FLORIPA");
         assertThat(result.sources()).containsExactly("Seed Data");

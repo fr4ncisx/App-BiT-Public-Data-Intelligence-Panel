@@ -6,6 +6,7 @@ import com.appbit.geoanalytics.application.ai.RegionEvidenceDTO;
 import com.appbit.geoanalytics.domain.ai.enums.AiIntent;
 import com.appbit.geoanalytics.domain.ai.enums.Language;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @ActiveProfiles("test-dev")
+@Tag("live")
 class GenerateAIAnswerServiceDevLiveTest {
 
     @Autowired

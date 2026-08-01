@@ -7,6 +7,7 @@ import com.appbit.geoanalytics.application.ai.WarningDTO;
 import com.appbit.geoanalytics.domain.ai.enums.AiIntent;
 import com.appbit.geoanalytics.domain.ai.enums.Language;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -205,6 +206,19 @@ class GenerateAIAnswerGoldenTest {
                     .as("Response must NOT contain forbidden word: " + forbidden)
                     .doesNotContain(forbidden.toLowerCase());
         }
+    }
+
+    @Test
+    void minimalResponsePreservedVerbatim() {
+        var aiResponse = new com.appbit.geoanalytics.application.ai.AIResponse(
+                "Concentracion alta.", "5000 usuarios en la zona.", "NONE");
+        when(callResponseSpec.entity(any(Class.class), any(Consumer.class))).thenReturn(aiResponse);
+
+        var result = service.execute(populationEvidence(), AiIntent.POPULATION_CONCENTRATION, Language.ES);
+
+        assertThat(result.summary()).isEqualTo("Concentracion alta.");
+        assertThat(result.explanation()).isEqualTo("5000 usuarios en la zona.");
+        assertThat(result.suggestedVisualization()).isEqualTo("NONE");
     }
 
     @ParameterizedTest(name = "Numbers rounded: {0}")
