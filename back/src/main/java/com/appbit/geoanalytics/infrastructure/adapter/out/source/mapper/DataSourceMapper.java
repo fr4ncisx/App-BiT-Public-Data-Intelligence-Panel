@@ -10,7 +10,6 @@ import org.mapstruct.Mapper;
 import org.mapstruct.MappingConstants;
 
 import java.util.List;
-import java.util.Optional;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
 public interface DataSourceMapper {
@@ -34,6 +33,4 @@ public interface DataSourceMapper {
     default GovernanceType toGovernanceType(String value) {
         return value == null ? null : GovernanceType.valueOf(value);
     }
-
-    Optional<SourceCatalogEntry> toSourceCatalogEntry(Optional<DataSourceEntity> entity);
 }

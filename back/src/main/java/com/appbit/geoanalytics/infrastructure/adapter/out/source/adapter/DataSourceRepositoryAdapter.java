@@ -20,7 +20,7 @@ public class DataSourceRepositoryAdapter implements DataSourcePort {
 
     @Override
     public Optional<SourceCatalogEntry> findByFileName(SourceFileName fileName) {
-        return mapper.toSourceCatalogEntry(repository.findByFileName(fileName.value()));
+        return repository.findByFileName(fileName.value()).map(mapper::toSourceCatalogEntry);
     }
 
     @Override
