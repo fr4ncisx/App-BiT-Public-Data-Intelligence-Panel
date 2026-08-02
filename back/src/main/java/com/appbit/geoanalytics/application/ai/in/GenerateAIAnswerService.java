@@ -20,6 +20,10 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class GenerateAIAnswerService implements GenerateAIAnswerUseCase {
 
+    private static final int MAX_SUMMARY_LENGTH = 1000;
+    private static final int MAX_EXPLANATION_LENGTH = 4000;
+    private static final List<String> SUPPORTED_VISUALIZATIONS = List.of("MAP", "TABLE", "RANKING", "FLOW", "NONE");
+
     private final ChatClient.Builder chatClientBuilder;
 
     @Override
@@ -159,16 +163,43 @@ public class GenerateAIAnswerService implements GenerateAIAnswerUseCase {
 
     private AIResponseDTO toDTO(AIResponse response, EvidenceContext evidence, Language lang) {
         return new AIResponseDTO(
-                response.summary() != null ? response.summary() :
-                        localizedMessage(lang, "No se pudo generar un resumen.", "Could not generate summary.", "Nao foi possivel gerar um resumo."),
-                response.explanation() != null ? response.explanation() :
-                        localizedMessage(lang, "No se pudo generar una explicacion.", "Could not generate an explanation.", "Nao foi possivel gerar uma explicacao."),
+                truncate(
+                        response.summary() != null ? response.summary() :
+                                localizedMessage(lang, "No se pudo generar un resumen.", "Could not generate summary.", "Nao foi possivel gerar um resumo."),
+                        MAX_SUMMARY_LENGTH
+                ),
+                truncate(
+                        response.explanation() != null ? response.explanation() :
+                                localizedMessage(lang, "No se pudo generar una explicacion.", "Could not generate an explanation.", "Nao foi possivel gerar uma explicacao."),
+                        MAX_EXPLANATION_LENGTH
+                ),
                 evidence.indicators(),
                 evidence.regions(),
                 evidence.sources(),
                 evidence.warnings(),
-                response.suggestedVisualization() != null ? response.suggestedVisualization() : "NONE"
+                normalizeVisualization(response.suggestedVisualization())
         );
+    }
+
+    private static String truncate(String value, int maxLength) {
+        if (value.length() <= maxLength) {
+            return value;
+        }
+
+        int codePoints = value.codePointCount(0, value.length());
+        int end = value.offsetByCodePoints(0, Math.min(maxLength, codePoints));
+
+        return value.substring(0, end);
+    }
+
+    private static String normalizeVisualization(@Nullable String value) {
+        if (value == null) {
+            return "NONE";
+        }
+
+        String normalized = value.strip().toUpperCase();
+
+        return SUPPORTED_VISUALIZATIONS.contains(normalized) ? normalized : "NONE";
     }
 
     private AIResponseDTO insufficientEvidenceResponse(Language lang) {

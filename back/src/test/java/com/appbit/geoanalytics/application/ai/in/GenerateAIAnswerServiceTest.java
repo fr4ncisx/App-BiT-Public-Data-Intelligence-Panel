@@ -224,6 +224,74 @@ class GenerateAIAnswerServiceTest {
         assertThat(result.suggestedVisualization()).isEqualTo("NONE");
     }
 
+    @Test
+    void unsupportedVisualizationDefaultsToNONE() {
+        var evidence = sufficientEvidence();
+        var aiResponse = new AIResponse("Summary", "Explanation", "PIE_CHART");
+
+        when(chatClientBuilder.build()).thenReturn(chatClient);
+        when(chatClient.prompt()).thenReturn(chatClientRequestSpec);
+        when(chatClientRequestSpec.system(any(String.class))).thenReturn(chatClientRequestSpec);
+        when(chatClientRequestSpec.user(any(String.class))).thenReturn(chatClientRequestSpec);
+        when(chatClientRequestSpec.call()).thenReturn(callResponseSpec);
+        when(callResponseSpec.entity(any(Class.class), any(Consumer.class))).thenReturn(aiResponse);
+
+        var result = service.execute(evidence, POPULATION_CONCENTRATION, Language.ES);
+
+        assertThat(result.suggestedVisualization()).isEqualTo("NONE");
+    }
+
+    @Test
+    void visualizationIsTrimmedAndCaseInsensitive() {
+        var evidence = sufficientEvidence();
+        var aiResponse = new AIResponse("Summary", "Explanation", " map ");
+
+        when(chatClientBuilder.build()).thenReturn(chatClient);
+        when(chatClient.prompt()).thenReturn(chatClientRequestSpec);
+        when(chatClientRequestSpec.system(any(String.class))).thenReturn(chatClientRequestSpec);
+        when(chatClientRequestSpec.user(any(String.class))).thenReturn(chatClientRequestSpec);
+        when(chatClientRequestSpec.call()).thenReturn(callResponseSpec);
+        when(callResponseSpec.entity(any(Class.class), any(Consumer.class))).thenReturn(aiResponse);
+
+        var result = service.execute(evidence, POPULATION_CONCENTRATION, Language.ES);
+
+        assertThat(result.suggestedVisualization()).isEqualTo("MAP");
+    }
+
+    @Test
+    void summaryIsTruncatedToMaxLength() {
+        var evidence = sufficientEvidence();
+        var aiResponse = new AIResponse("x".repeat(1500), "Explanation", "MAP");
+
+        when(chatClientBuilder.build()).thenReturn(chatClient);
+        when(chatClient.prompt()).thenReturn(chatClientRequestSpec);
+        when(chatClientRequestSpec.system(any(String.class))).thenReturn(chatClientRequestSpec);
+        when(chatClientRequestSpec.user(any(String.class))).thenReturn(chatClientRequestSpec);
+        when(chatClientRequestSpec.call()).thenReturn(callResponseSpec);
+        when(callResponseSpec.entity(any(Class.class), any(Consumer.class))).thenReturn(aiResponse);
+
+        var result = service.execute(evidence, POPULATION_CONCENTRATION, Language.ES);
+
+        assertThat(result.summary()).hasSize(1000);
+    }
+
+    @Test
+    void explanationIsTruncatedToMaxLength() {
+        var evidence = sufficientEvidence();
+        var aiResponse = new AIResponse("Summary", "y".repeat(5000), "MAP");
+
+        when(chatClientBuilder.build()).thenReturn(chatClient);
+        when(chatClient.prompt()).thenReturn(chatClientRequestSpec);
+        when(chatClientRequestSpec.system(any(String.class))).thenReturn(chatClientRequestSpec);
+        when(chatClientRequestSpec.user(any(String.class))).thenReturn(chatClientRequestSpec);
+        when(chatClientRequestSpec.call()).thenReturn(callResponseSpec);
+        when(callResponseSpec.entity(any(Class.class), any(Consumer.class))).thenReturn(aiResponse);
+
+        var result = service.execute(evidence, POPULATION_CONCENTRATION, Language.ES);
+
+        assertThat(result.explanation()).hasSize(4000);
+    }
+
     private static EvidenceContext sufficientEvidence() {
         return new EvidenceContext(
                 List.of(new RegionEvidenceDTO("REG_FLORIPA", "Florianopolis", "Florianopolis",

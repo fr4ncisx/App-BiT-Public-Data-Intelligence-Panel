@@ -158,6 +158,28 @@ class IngestConcentrationServiceTest {
     }
 
     @Test
+    void shouldRejectRowWithMalformedNumericFieldWithoutFailingRun() {
+        mockSourceIdResolution();
+
+        var row = new ConcentrationCsvRow(
+                "1234567890123", "CBD_BEIRAMAR", "Florianopolis",
+                "2026-03-01", "MANHA", "abc", "50", "1000000", "500000", "120",
+                "0.0100", "0.050", "10", "5", "-27.595400", "-48.548000"
+        );
+        var region = RegionEntity.builder().id(REGION_ID).build();
+
+        when(csvReader.read(any(InputStream.class), eq(ConcentrationCsvRow.class))).thenReturn(createStubIterator(List.of(row)));
+        when(antennaRepository.findAllEcgis()).thenReturn(Set.of("1234567890123"));
+        when(regionRepository.findByClusterName("CBD_BEIRAMAR")).thenReturn(Optional.of(region));
+
+        IngestConcentrationResult result = service.execute(TEST_KEY);
+
+        assertThat(result.rowsRead()).isEqualTo(1);
+        assertThat(result.rowsInserted()).isZero();
+        verify(lifecycleManager).complete(mockRun, 1, 0, 1);
+    }
+
+    @Test
     void shouldMarkRunAsFailedWhenIngestThrows() {
         mockSourceIdResolution();
         when(storagePort.openStream(TEST_KEY)).thenThrow(new RuntimeException("Storage unavailable"));

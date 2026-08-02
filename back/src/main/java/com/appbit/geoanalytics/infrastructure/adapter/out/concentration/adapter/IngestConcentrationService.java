@@ -169,7 +169,12 @@ public class IngestConcentrationService implements IngestConcentrationUseCase, C
             return null;
         }
 
-        return createMetric(row, sourceId, region.get().getId());
+        try {
+            return createMetric(row, sourceId, region.get().getId());
+        } catch (RuntimeException e) {
+            log.warn("Rejected ECGI {}: malformed metric data: {}", row.ecgi().trim(), e.getMessage());
+            return null;
+        }
     }
 
     private boolean isValidRow(ConcentrationCsvRow row, Set<String> existingEcgis) {
