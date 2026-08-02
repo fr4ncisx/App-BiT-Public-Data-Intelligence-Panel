@@ -19,6 +19,8 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class RequestCorrelationFilterTest {
 
+    private static final String VALID_UUID = "123e4567-e89b-12d3-a456-426614174000";
+
     private final RequestCorrelationFilter filter = new RequestCorrelationFilter();
 
     @Mock
@@ -32,25 +34,25 @@ class RequestCorrelationFilterTest {
     @Test
     void keepsValidRequestIdFromHeader() throws Exception {
         var request = new MockHttpServletRequest();
-        request.addHeader(RequestCorrelationConstants.REQUEST_ID_HEADER, "abc-1234_xy");
+        request.addHeader(RequestCorrelationConstants.REQUEST_ID_HEADER, VALID_UUID);
         var response = new MockHttpServletResponse();
 
         org.mockito.Mockito.doAnswer(invocation -> {
-            assertThat(MDC.get(RequestCorrelationConstants.REQUEST_ID_MDC_KEY)).isEqualTo("abc-1234_xy");
+            assertThat(MDC.get(RequestCorrelationConstants.REQUEST_ID_MDC_KEY)).isEqualTo(VALID_UUID);
             return null;
         }).when(filterChain).doFilter(request, response);
 
         filter.doFilter(request, response, filterChain);
 
-        assertThat(request.getAttribute(RequestCorrelationConstants.REQUEST_ID_ATTRIBUTE)).isEqualTo("abc-1234_xy");
-        assertThat(response.getHeader(RequestCorrelationConstants.REQUEST_ID_HEADER)).isEqualTo("abc-1234_xy");
+        assertThat(request.getAttribute(RequestCorrelationConstants.REQUEST_ID_ATTRIBUTE)).isEqualTo(VALID_UUID);
+        assertThat(response.getHeader(RequestCorrelationConstants.REQUEST_ID_HEADER)).isEqualTo(VALID_UUID);
         verify(filterChain).doFilter(request, response);
     }
 
     @Test
     void removesMdcAfterChainCompletes() throws Exception {
         var request = new MockHttpServletRequest();
-        request.addHeader(RequestCorrelationConstants.REQUEST_ID_HEADER, "abc-1234_xy");
+        request.addHeader(RequestCorrelationConstants.REQUEST_ID_HEADER, VALID_UUID);
 
         filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
@@ -103,6 +105,28 @@ class RequestCorrelationFilterTest {
     }
 
     @Test
+    void generatesNewIdWhenHeaderIsNotAUuid() throws Exception {
+        var request = new MockHttpServletRequest();
+        request.addHeader(RequestCorrelationConstants.REQUEST_ID_HEADER, "abc-1234_xy");
+
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+        String resolved = (String) request.getAttribute(RequestCorrelationConstants.REQUEST_ID_ATTRIBUTE);
+        assertThat(resolved).isEqualTo(UUID.fromString(resolved).toString());
+    }
+
+    @Test
+    void generatesNewIdWhenHeaderHasWrongUuidFormat() throws Exception {
+        var request = new MockHttpServletRequest();
+        request.addHeader(RequestCorrelationConstants.REQUEST_ID_HEADER, "123e4567-e89b-12d3-a456-42661417400Z");
+
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+        String resolved = (String) request.getAttribute(RequestCorrelationConstants.REQUEST_ID_ATTRIBUTE);
+        assertThat(resolved).isEqualTo(UUID.fromString(resolved).toString());
+    }
+
+    @Test
     void generatesNewIdWhenHeaderIsBlank() throws Exception {
         var request = new MockHttpServletRequest();
         request.addHeader(RequestCorrelationConstants.REQUEST_ID_HEADER, "   ");
@@ -116,10 +140,20 @@ class RequestCorrelationFilterTest {
     @Test
     void stripsWhitespaceFromValidHeader() throws Exception {
         var request = new MockHttpServletRequest();
-        request.addHeader(RequestCorrelationConstants.REQUEST_ID_HEADER, "  abc-1234_xy  ");
+        request.addHeader(RequestCorrelationConstants.REQUEST_ID_HEADER, "  " + VALID_UUID + "  ");
 
         filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-        assertThat(request.getAttribute(RequestCorrelationConstants.REQUEST_ID_ATTRIBUTE)).isEqualTo("abc-1234_xy");
+        assertThat(request.getAttribute(RequestCorrelationConstants.REQUEST_ID_ATTRIBUTE)).isEqualTo(VALID_UUID);
+    }
+
+    @Test
+    void acceptsUppercaseUuidFromHeader() throws Exception {
+        var request = new MockHttpServletRequest();
+        request.addHeader(RequestCorrelationConstants.REQUEST_ID_HEADER, VALID_UUID.toUpperCase());
+
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+        assertThat(request.getAttribute(RequestCorrelationConstants.REQUEST_ID_ATTRIBUTE)).isEqualTo(VALID_UUID.toUpperCase());
     }
 }

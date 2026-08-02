@@ -12,6 +12,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Resolves and propagates the HTTP request correlation id.
@@ -27,8 +28,9 @@ import java.util.UUID;
 @Component
 public class RequestCorrelationFilter extends OncePerRequestFilter {
 
-    private static final int MIN_REQUEST_ID_LENGTH = 8;
-    private static final int MAX_REQUEST_ID_LENGTH = 64;
+    private static final Pattern UUID_PATTERN = Pattern.compile(
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    );
 
     @Override
     protected void doFilterInternal(
@@ -60,27 +62,7 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
     }
 
     private boolean isValidRequestId(String value) {
-        if (value.length() < MIN_REQUEST_ID_LENGTH || value.length() > MAX_REQUEST_ID_LENGTH) {
-            return false;
-        }
-
-        for (int index = 0; index < value.length(); index++) {
-            char current = value.charAt(index);
-
-            if (isAlphaNumeric(current) || current == '-' || current == '_') {
-                continue;
-            }
-
-            return false;
-        }
-
-        return true;
-    }
-
-    private boolean isAlphaNumeric(char value) {
-        return (value >= 'A' && value <= 'Z')
-                || (value >= 'a' && value <= 'z')
-                || (value >= '0' && value <= '9');
+        return UUID_PATTERN.matcher(value).matches();
     }
 
     private @Nullable String normalizeNullable(@Nullable String value) {

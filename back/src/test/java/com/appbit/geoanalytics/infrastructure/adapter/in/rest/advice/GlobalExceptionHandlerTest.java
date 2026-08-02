@@ -204,6 +204,22 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handlesIllegalArgumentAsBadRequest() throws Exception {
+        mockMvc.perform(get("/test/illegal-argument"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ApiResponseCode.VALIDATION_ERROR.name()))
+                .andExpect(jsonPath("$.errors[0].reason").value("Invalid indicator type: FOO"));
+    }
+
+    @Test
+    void handlesIllegalArgumentWithNotFoundMessageAs404() throws Exception {
+        mockMvc.perform(get("/test/illegal-argument-not-found"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ApiResponseCode.RESOURCE_NOT_FOUND.name()))
+                .andExpect(jsonPath("$.errors[0].reason").value("Region not found: FOO"));
+    }
+
+    @Test
     void handlesUncaughtExceptions() throws Exception {
         mockMvc.perform(get("/test/uncaught"))
                 .andExpect(status().isInternalServerError())
@@ -307,6 +323,16 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/data-integrity")
         void dataIntegrity() {
             throw new DataIntegrityViolationException("duplicate key");
+        }
+
+        @GetMapping("/test/illegal-argument")
+        void illegalArgument() {
+            throw new IllegalArgumentException("Invalid indicator type: FOO");
+        }
+
+        @GetMapping("/test/illegal-argument-not-found")
+        void illegalArgumentNotFound() {
+            throw new IllegalArgumentException("Region not found: FOO");
         }
 
         @GetMapping("/test/uncaught")

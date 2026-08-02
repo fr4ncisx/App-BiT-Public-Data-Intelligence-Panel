@@ -11,15 +11,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RequiredArgsConstructor
 public class GetRegionRankingService implements GetRegionRankingUseCase {
 
+    private static final int MAX_RANKING_RESULTS = 1000;
+
     private final SocialGapPort socialGapPort;
 
     @Override
     public RegionRankingResponse execute(String indicatorType, int limit) {
-        var summaries = socialGapPort.findByIndicatorType(indicatorType, Integer.MAX_VALUE, 0);
+        int safeLimit = Math.max(1, Math.min(limit, MAX_RANKING_RESULTS));
+        var summaries = socialGapPort.findByIndicatorType(indicatorType, safeLimit, 0);
         var position = new AtomicInteger(1);
         var items = summaries.stream()
                 .sorted(Comparator.comparing(s -> s.score(), Comparator.reverseOrder()))
-                .limit(Math.max(1, limit))
+                .limit(safeLimit)
                 .map(s -> new RankingItem(
                         position.getAndIncrement(),
                         s.regionCode(),

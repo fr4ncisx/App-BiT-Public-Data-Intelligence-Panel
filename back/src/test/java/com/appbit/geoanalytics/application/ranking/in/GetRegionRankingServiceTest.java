@@ -37,7 +37,7 @@ class GetRegionRankingServiceTest {
 
     @Test
     void returnsRankingSortedDescendingAndLimited() {
-        when(socialGapPort.findByIndicatorType("TRAINING", Integer.MAX_VALUE, 0)).thenReturn(List.of(
+        when(socialGapPort.findByIndicatorType("TRAINING", 2, 0)).thenReturn(List.of(
                 summary("MED", new BigDecimal("0.5")),
                 summary("TOP", new BigDecimal("0.9")),
                 summary("LOW", new BigDecimal("0.2"))
@@ -56,7 +56,7 @@ class GetRegionRankingServiceTest {
 
     @Test
     void returnsSingleItemWhenLimitIsZeroOrNegative() {
-        when(socialGapPort.findByIndicatorType("TRAINING", Integer.MAX_VALUE, 0)).thenReturn(List.of(
+        when(socialGapPort.findByIndicatorType("TRAINING", 1, 0)).thenReturn(List.of(
                 summary("A", new BigDecimal("0.9")),
                 summary("B", new BigDecimal("0.8"))
         ));
@@ -69,7 +69,7 @@ class GetRegionRankingServiceTest {
 
     @Test
     void returnsEmptyRankingWhenNoSummaries() {
-        when(socialGapPort.findByIndicatorType("TRAINING", Integer.MAX_VALUE, 0)).thenReturn(List.of());
+        when(socialGapPort.findByIndicatorType("TRAINING", 5, 0)).thenReturn(List.of());
 
         RegionRankingResponse response = service.execute("TRAINING", 5);
 
@@ -77,11 +77,24 @@ class GetRegionRankingServiceTest {
     }
 
     @Test
-    void requestsAllSummariesFromPort() {
-        when(socialGapPort.findByIndicatorType("TRAINING", Integer.MAX_VALUE, 0)).thenReturn(List.of());
+    void requestsSummariesBoundedByRequestedLimit() {
+        when(socialGapPort.findByIndicatorType("TRAINING", 5, 0)).thenReturn(List.of());
 
         service.execute("TRAINING", 5);
 
-        verify(socialGapPort).findByIndicatorType(eq("TRAINING"), eq(Integer.MAX_VALUE), eq(0));
+        verify(socialGapPort).findByIndicatorType(eq("TRAINING"), eq(5), eq(0));
+    }
+
+    @Test
+    void capsFetchAtMaxRankingResults() {
+        when(socialGapPort.findByIndicatorType("TRAINING", 1000, 0)).thenReturn(List.of(
+                summary("A", new BigDecimal("0.9")),
+                summary("B", new BigDecimal("0.8"))
+        ));
+
+        RegionRankingResponse response = service.execute("TRAINING", 5000);
+
+        assertThat(response.ranking()).hasSize(2);
+        verify(socialGapPort).findByIndicatorType(eq("TRAINING"), eq(1000), eq(0));
     }
 }
