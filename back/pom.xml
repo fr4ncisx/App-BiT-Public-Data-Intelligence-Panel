@@ -29,6 +29,9 @@
     <properties>
         <java.version>25</java.version>
         <spring-ai.version>2.0.0</spring-ai.version>
+        <postgresql.version>42.7.12</postgresql.version>
+        <jackson-bom.version>3.1.5</jackson-bom.version>
+        <jackson-2-bom.version>2.21.5</jackson-2-bom.version>
         <app.name>geo-analytics-api</app.name>
         <excluded.groups>live</excluded.groups>
         <native-build-tools-plugin.version>1.1.6</native-build-tools-plugin.version>
