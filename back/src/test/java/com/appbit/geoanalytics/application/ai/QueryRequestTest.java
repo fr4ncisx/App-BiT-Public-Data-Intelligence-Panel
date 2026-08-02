@@ -90,4 +90,34 @@ class QueryRequestTest {
 
         assertThat(violations).isEmpty();
     }
+
+    @Test
+    void rejectsRegionCodeOver80Chars() {
+        var request = new QueryRequest("consulta válida", "x".repeat(81), null, null, null);
+
+        Set<ConstraintViolation<QueryRequest>> violations = validator.validate(request);
+
+        assertThat(violations).hasSize(1);
+        assertThat(violations.iterator().next().getPropertyPath().toString()).isEqualTo("regionCode");
+    }
+
+    @Test
+    void rejectsIndicatorTypeOver80Chars() {
+        var request = new QueryRequest("consulta válida", null, "x".repeat(81), null, null);
+
+        Set<ConstraintViolation<QueryRequest>> violations = validator.validate(request);
+
+        assertThat(violations).hasSize(1);
+        assertThat(violations.iterator().next().getPropertyPath().toString()).isEqualTo("indicatorType");
+    }
+
+    @Test
+    void rejectsLanguageOver16Chars() {
+        var request = new QueryRequest("consulta válida", null, null, null, "x".repeat(17));
+
+        Set<ConstraintViolation<QueryRequest>> violations = validator.validate(request);
+
+        assertThat(violations).hasSize(1);
+        assertThat(violations.iterator().next().getPropertyPath().toString()).isEqualTo("language");
+    }
 }

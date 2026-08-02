@@ -25,6 +25,13 @@ spring:
       include-message: never
       include-exception: false
       include-binding-errors: never
+  jackson:
+    factory:
+      constraints:
+        read:
+          max-string-length: 10000
+          max-number-length: 1000
+          max-nesting-depth: 100
   threads:
     virtual:
       enabled: true

@@ -12,18 +12,22 @@ public record QueryRequest(
         String query,
 
         @Nullable
+        @Size(max = 80)
         @Schema(description = "Código de región para filtrar (opcional).", example = "REG_FLORIPA", nullable = true)
         String regionCode,
 
         @Nullable
+        @Size(max = 80)
         @Schema(description = "Tipo de indicador para filtrar (opcional).", example = "TRAINING", nullable = true)
         String indicatorType,
 
         @Nullable
+        @Size(max = 80)
         @Schema(description = "Período para filtrar (opcional).", example = "MANHA", nullable = true)
         String period,
 
         @Nullable
+        @Size(max = 16)
         @Schema(description = "Idioma de la consulta (opcional).", example = "pt", nullable = true)
         String language
 ) {
