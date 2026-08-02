@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,9 +38,9 @@ public interface SocialGapApi {
     })
     ResponseEntity<ApiResponse<SocialGapResponse>> getTrainingGap(
             @Parameter(description = "Número máximo de resultados a retornar.", example = "20")
-            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(1000) int limit,
             @Parameter(description = "Número de resultados a saltar para paginación.", example = "0")
-            @RequestParam(defaultValue = "0") int offset
+            @RequestParam(defaultValue = "0") @Min(0) int offset
     );
 
     @GetMapping("/employability")
@@ -59,9 +61,9 @@ public interface SocialGapApi {
     })
     ResponseEntity<ApiResponse<SocialGapResponse>> getEmployabilityGap(
             @Parameter(description = "Número máximo de resultados a retornar.", example = "20")
-            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(1000) int limit,
             @Parameter(description = "Número de resultados a saltar para paginación.", example = "0")
-            @RequestParam(defaultValue = "0") int offset
+            @RequestParam(defaultValue = "0") @Min(0) int offset
     );
 
     @GetMapping("/mental-health")
@@ -82,9 +84,9 @@ public interface SocialGapApi {
     })
     ResponseEntity<ApiResponse<SocialGapResponse>> getMentalHealthGap(
             @Parameter(description = "Número máximo de resultados a retornar.", example = "20")
-            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(1000) int limit,
             @Parameter(description = "Número de resultados a saltar para paginación.", example = "0")
-            @RequestParam(defaultValue = "0") int offset
+            @RequestParam(defaultValue = "0") @Min(0) int offset
     );
 
     @GetMapping("/mentorship")
@@ -105,9 +107,9 @@ public interface SocialGapApi {
     })
     ResponseEntity<ApiResponse<SocialGapResponse>> getMentorshipGap(
             @Parameter(description = "Número máximo de resultados a retornar.", example = "20")
-            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(1000) int limit,
             @Parameter(description = "Número de resultados a saltar para paginación.", example = "0")
-            @RequestParam(defaultValue = "0") int offset
+            @RequestParam(defaultValue = "0") @Min(0) int offset
     );
 
     @GetMapping("/social-experience")
@@ -128,8 +130,8 @@ public interface SocialGapApi {
     })
     ResponseEntity<ApiResponse<SocialGapResponse>> getSocialExperienceGap(
             @Parameter(description = "Número máximo de resultados a retornar.", example = "20")
-            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(1000) int limit,
             @Parameter(description = "Número de resultados a saltar para paginación.", example = "0")
-            @RequestParam(defaultValue = "0") int offset
+            @RequestParam(defaultValue = "0") @Min(0) int offset
     );
 }

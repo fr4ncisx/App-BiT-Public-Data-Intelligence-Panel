@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,7 +39,7 @@ public interface RegionRankingApi {
             @Parameter(description = "Tipo de indicador para el ranking.", example = "TRAINING", required = true)
             String indicatorType,
 
-            @RequestParam(defaultValue = "10")
+            @RequestParam(defaultValue = "10") @Min(1) @Max(1000)
             @Parameter(description = "Cantidad máxima de regiones en el resultado.", example = "10")
             @Nullable
             Integer limit

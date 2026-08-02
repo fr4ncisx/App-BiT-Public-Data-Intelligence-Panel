@@ -488,6 +488,60 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles invalid arguments raised by application services.
+     *
+     * <p>Invalid arguments represent controlled client input errors raised
+     * outside Jakarta Validation, such as unknown region codes or data sources.
+     * When the message indicates a missing resource, the response is mapped to
+     * HTTP 404; otherwise it is treated as a validation error with HTTP 400.
+     * The message matching is intentionally narrow to avoid masking genuine
+     * internal failures as client errors.</p>
+     *
+     * @param ex invalid argument exception raised by an application service
+     * @return standardized HTTP 400 or 404 response with error detail
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(
+            IllegalArgumentException ex
+    ) {
+        String requestId = requestContext.requestId();
+
+        boolean resourceNotFound = ex.getMessage() != null
+                && ex.getMessage().toLowerCase().contains("not found");
+
+        log.warn(
+                "Invalid argument [{}]: resourceNotFound={}, message='{}'",
+                requestId,
+                resourceNotFound,
+                ex.getMessage()
+        );
+
+        ApiResponse.ApiErrorDetail error = detail(
+                null,
+                fallback(ex.getMessage(), "Invalid request argument."),
+                null
+        );
+
+        if (resourceNotFound) {
+            return apiResponseFactory.error(
+                    HttpStatus.NOT_FOUND,
+                    ApiResponseCode.RESOURCE_NOT_FOUND,
+                    "The requested resource could not be found.",
+                    List.of(error),
+                    requestId
+            );
+        }
+
+        return apiResponseFactory.error(
+                HttpStatus.BAD_REQUEST,
+                ApiResponseCode.VALIDATION_ERROR,
+                "The request contains invalid arguments.",
+                List.of(error),
+                requestId
+        );
+    }
+
+    /**
      * Handles any uncaught exception not covered by more specific handlers.
      *
      * <p>This is the final safety net for unexpected failures. It avoids leaking
