@@ -77,7 +77,7 @@ public class IngestionOrchestratorService implements IngestionOrchestrator {
                 if (attempt < MAX_RETRIES) {
                     try {
                         Thread.sleep(RETRY_DELAY_MS * attempt);
-                    } catch (InterruptedException ie) {
+                    } catch (InterruptedException _) {
                         Thread.currentThread().interrupt();
                         return IngestionTaskResult.failed(fileName, "Interrupted during retry");
                     }
