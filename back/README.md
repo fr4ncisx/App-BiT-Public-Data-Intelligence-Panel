@@ -130,9 +130,12 @@ The backend uses these variables:
 | `APPBIT_STORAGE_R2_BUCKET_NAME` | Bucket that stores fixed source CSV files. |
 | `APPBIT_STORAGE_R2_REGION` | Storage region. Use `auto` for R2-compatible flows. |
 | `APPBIT_STORAGE_R2_CSV_PREFIX` | Prefix for fixed source CSV files. |
-| `APPBIT_INGESTION_ENABLED` | Enables operational ingestion flows. |
-| `APPBIT_INGESTION_BATCH_SIZE` | Rows processed per ingestion batch. |
-| `APPBIT_INGESTION_FAIL_FAST` | Whether ingestion stops at the first invalid row. |
+| `APPBIT_INGESTION_ENABLED` | Master switch for startup CSV ingestion. Default `true`. |
+| `APPBIT_INGESTION_BATCH_SIZE` | Rows per insert batch; must be `>= 1`. Default `500`. |
+| `APPBIT_INGESTION_FAIL_FAST` | `true` aborts startup on first ingestion failure; `false` logs and continues. Default `true`. |
+| `APPBIT_INGESTION_SKIP_FILES` | Comma-separated files expected to have no ingest service; skipped silently (DEBUG) instead of WARN. Defaults to the catalog entries without a service. |
+| `APPBIT_INGESTION_RETRY_MAX_ATTEMPTS` | Max ingestion attempts per file before failing. |
+| `APPBIT_INGESTION_RETRY_BASE_DELAY_MS` | Base retry backoff in ms; real delay = base × attempt. |
 
 Local MinIO can use `http://localhost:9000` as the storage endpoint.
 Production values must point to the Cloudflare R2 endpoint and credentials.
