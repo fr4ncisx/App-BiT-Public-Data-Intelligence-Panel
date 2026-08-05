@@ -15,11 +15,13 @@ import com.appbit.geoanalytics.domain.source.vo.SourceFileName;
 import com.appbit.geoanalytics.domain.testing.DomainFixtures;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.entity.RegionEntity;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.AntennaJpaRepository;
-import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.RegionJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.concentration.csv.ConcentrationCsvRow;
 import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.config.IngestionProperties;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.pipeline.CsvBatchIngester;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.pipeline.RegionIndex;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.pipeline.RegionResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.MappingIterator;
 
@@ -40,11 +42,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -56,7 +60,7 @@ class IngestConcentrationServiceTest {
     @Mock private DataSourcePort dataSourcePort;
     @Mock private GenericCsvReader csvReader;
     @Mock private AntennaJpaRepository antennaRepository;
-    @Mock private RegionJpaRepository regionRepository;
+    @Mock private RegionResolver regionResolver;
     @Mock private IngestionLifecycleManager lifecycleManager;
     @Mock private TransactionTemplate transactionTemplate;
     @Mock private IdGeneratorPort idGeneratorPort;
@@ -72,15 +76,16 @@ class IngestConcentrationServiceTest {
     @BeforeEach
     void setUp() {
         when(idGeneratorPort.generate()).thenReturn(DomainFixtures.uuidV7());
-        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
-            TransactionCallback<?> callback = invocation.getArgument(0);
-            return callback.doInTransaction(null);
-        });
+        doAnswer(invocation -> {
+            Consumer<TransactionStatus> action = invocation.getArgument(0);
+            action.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
+        var batchIngester = new CsvBatchIngester(
+                storagePort, csvReader, transactionTemplate, new IngestionProperties(true, 500, true));
         service = new IngestConcentrationService(
-                storagePort, dataSourcePort, csvReader,
-                antennaRepository, regionRepository,
-                lifecycleManager, transactionTemplate, idGeneratorPort, jdbcTemplate,
-                new IngestionProperties(true, 500, true)
+                dataSourcePort, antennaRepository, regionResolver,
+                lifecycleManager, idGeneratorPort, batchIngester, jdbcTemplate
         );
 
         mockRun = IngestionRun.builder()
@@ -123,16 +128,21 @@ class IngestConcentrationServiceTest {
         );
     }
 
+    private RegionIndex createRegionIndex() {
+        return new RegionIndex(List.of(
+                RegionEntity.builder().id(REGION_ID).clusterName("CBD_BEIRAMAR").municipality("Florianopolis").build()
+        ));
+    }
+
     @Test
     void shouldIngestConcentrationSuccessfully() {
         mockSourceIdResolution();
 
         var row = createValidRow();
-        var region = RegionEntity.builder().id(REGION_ID).build();
 
         when(csvReader.read(any(InputStream.class), eq(ConcentrationCsvRow.class))).thenReturn(createStubIterator(List.of(row)));
         when(antennaRepository.findAllEcgis()).thenReturn(Set.of("1234567890123"));
-        when(regionRepository.findByClusterName("CBD_BEIRAMAR")).thenReturn(Optional.of(region));
+        when(regionResolver.regions()).thenReturn(createRegionIndex());
 
         IngestConcentrationResult result = service.execute(TEST_KEY);
 
@@ -147,11 +157,10 @@ class IngestConcentrationServiceTest {
 
         var row1 = createValidRow();
         var row2 = createValidRow();
-        var region = RegionEntity.builder().id(REGION_ID).build();
 
         when(csvReader.read(any(InputStream.class), eq(ConcentrationCsvRow.class))).thenReturn(createStubIterator(List.of(row1, row2)));
         when(antennaRepository.findAllEcgis()).thenReturn(Set.of("1234567890123"));
-        when(regionRepository.findByClusterName("CBD_BEIRAMAR")).thenReturn(Optional.of(region));
+        when(regionResolver.regions()).thenReturn(createRegionIndex());
 
         IngestConcentrationResult result = service.execute(TEST_KEY);
 
@@ -168,11 +177,10 @@ class IngestConcentrationServiceTest {
                 "2026-03-01", "MANHA", "abc", "50", "1000000", "500000", "120",
                 "0.0100", "0.050", "10", "5", "-27.595400", "-48.548000"
         );
-        var region = RegionEntity.builder().id(REGION_ID).build();
 
         when(csvReader.read(any(InputStream.class), eq(ConcentrationCsvRow.class))).thenReturn(createStubIterator(List.of(row)));
         when(antennaRepository.findAllEcgis()).thenReturn(Set.of("1234567890123"));
-        when(regionRepository.findByClusterName("CBD_BEIRAMAR")).thenReturn(Optional.of(region));
+        when(regionResolver.regions()).thenReturn(createRegionIndex());
 
         IngestConcentrationResult result = service.execute(TEST_KEY);
 
