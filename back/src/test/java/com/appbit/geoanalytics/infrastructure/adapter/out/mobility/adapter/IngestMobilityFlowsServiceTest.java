@@ -14,10 +14,12 @@ import com.appbit.geoanalytics.domain.source.vo.DataSourceId;
 import com.appbit.geoanalytics.domain.source.vo.SourceFileName;
 import com.appbit.geoanalytics.domain.testing.DomainFixtures;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.entity.RegionEntity;
-import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.RegionJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.config.IngestionProperties;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.pipeline.CsvBatchIngester;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.pipeline.RegionIndex;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.pipeline.RegionResolver;
 import com.appbit.geoanalytics.infrastructure.adapter.out.mobility.csv.MobilityFlowCsvRow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +31,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.MappingIterator;
 
@@ -43,13 +45,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -61,7 +67,7 @@ class IngestMobilityFlowsServiceTest {
     @Mock private DatasetObjectStoragePort storagePort;
     @Mock private DataSourcePort dataSourcePort;
     @Mock private GenericCsvReader csvReader;
-    @Mock private RegionJpaRepository regionRepository;
+    @Mock private RegionResolver regionResolver;
     @Mock private IngestionLifecycleManager lifecycleManager;
     @Mock private TransactionTemplate transactionTemplate;
     @Mock private IdGeneratorPort idGeneratorPort;
@@ -79,14 +85,15 @@ class IngestMobilityFlowsServiceTest {
     @BeforeEach
     void setUp() {
         when(idGeneratorPort.generate()).thenReturn(ENTITY_ID);
-        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
-            TransactionCallback<?> callback = invocation.getArgument(0);
-            return callback.doInTransaction(null);
-        });
+        doAnswer(invocation -> {
+            Consumer<TransactionStatus> action = invocation.getArgument(0);
+            action.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
+        var batchIngester = new CsvBatchIngester(
+                storagePort, csvReader, transactionTemplate, new IngestionProperties(true, 500, true));
         service = new IngestMobilityFlowsService(
-                storagePort, dataSourcePort, csvReader,
-                regionRepository, lifecycleManager, transactionTemplate, idGeneratorPort, jdbcTemplate,
-                new IngestionProperties(true, 500, true)
+                dataSourcePort, regionResolver, lifecycleManager, idGeneratorPort, batchIngester, jdbcTemplate
         );
 
         mockRun = IngestionRun.builder()
@@ -142,8 +149,15 @@ class IngestMobilityFlowsServiceTest {
         );
     }
 
-    private RegionEntity createRegion() {
-        return RegionEntity.builder().id(REGION_ID).municipality("Florianopolis").build();
+    private RegionIndex createRegionIndex() {
+        return new RegionIndex(List.of(
+                RegionEntity.builder().id(REGION_ID).clusterName("CBD_BEIRAMAR").municipality("Florianopolis").build(),
+                RegionEntity.builder().id(REGION_ID).clusterName("CENTRO").municipality("Florianopolis").build()
+        ));
+    }
+
+    private RegionIndex createEmptyRegionIndex() {
+        return new RegionIndex(List.of());
     }
 
     @Test
@@ -152,8 +166,7 @@ class IngestMobilityFlowsServiceTest {
 
         when(csvReader.read(any(InputStream.class), eq(MobilityFlowCsvRow.class)))
                 .thenReturn(createStubIterator(List.of(createValidRow())));
-        when(regionRepository.findByClusterName("CBD_BEIRAMAR")).thenReturn(Optional.of(createRegion()));
-        when(regionRepository.findByClusterName("CENTRO")).thenReturn(Optional.of(createRegion()));
+        when(regionResolver.regions()).thenReturn(createRegionIndex());
 
         CsvIngestResult result = service.ingest(TEST_KEY);
 
@@ -168,7 +181,7 @@ class IngestMobilityFlowsServiceTest {
         var setter = captor.getValue();
         assertThat(setter.getBatchSize()).isEqualTo(1);
 
-        var ps = org.mockito.Mockito.mock(PreparedStatement.class);
+        var ps = mock(PreparedStatement.class);
         setter.setValues(ps, 0);
         verify(ps).setObject(1, ENTITY_ID);
         verify(ps).setObject(2, SOURCE_ID);
@@ -198,8 +211,7 @@ class IngestMobilityFlowsServiceTest {
         var row = createValidRow();
         when(csvReader.read(any(InputStream.class), eq(MobilityFlowCsvRow.class)))
                 .thenReturn(createStubIterator(List.of(row, row)));
-        when(regionRepository.findByClusterName("CBD_BEIRAMAR")).thenReturn(Optional.of(createRegion()));
-        when(regionRepository.findByClusterName("CENTRO")).thenReturn(Optional.of(createRegion()));
+        when(regionResolver.regions()).thenReturn(createRegionIndex());
 
         CsvIngestResult result = service.ingest(TEST_KEY);
 
@@ -214,6 +226,7 @@ class IngestMobilityFlowsServiceTest {
 
         when(csvReader.read(any(InputStream.class), eq(MobilityFlowCsvRow.class)))
                 .thenReturn(createStubIterator(List.of(createRow("1234567890123", "4567890123456", "XUMLA"))));
+        when(regionResolver.regions()).thenReturn(createRegionIndex());
 
         CsvIngestResult result = service.ingest(TEST_KEY);
 
@@ -228,7 +241,7 @@ class IngestMobilityFlowsServiceTest {
 
         when(csvReader.read(any(InputStream.class), eq(MobilityFlowCsvRow.class)))
                 .thenReturn(createStubIterator(List.of(createValidRow())));
-        when(regionRepository.findByClusterName("CBD_BEIRAMAR")).thenReturn(Optional.empty());
+        when(regionResolver.regions()).thenReturn(createEmptyRegionIndex());
 
         CsvIngestResult result = service.ingest(TEST_KEY);
 
@@ -249,6 +262,7 @@ class IngestMobilityFlowsServiceTest {
         );
         when(csvReader.read(any(InputStream.class), eq(MobilityFlowCsvRow.class)))
                 .thenReturn(createStubIterator(List.of(malformed)));
+        when(regionResolver.regions()).thenReturn(createRegionIndex());
 
         CsvIngestResult result = service.ingest(TEST_KEY);
 
@@ -267,14 +281,13 @@ class IngestMobilityFlowsServiceTest {
         }
         when(csvReader.read(any(InputStream.class), eq(MobilityFlowCsvRow.class)))
                 .thenReturn(createStubIterator(rows));
-        when(regionRepository.findByClusterName("CBD_BEIRAMAR")).thenReturn(Optional.of(createRegion()));
-        when(regionRepository.findByClusterName("CENTRO")).thenReturn(Optional.of(createRegion()));
+        when(regionResolver.regions()).thenReturn(createRegionIndex());
 
         CsvIngestResult result = service.ingest(TEST_KEY);
 
         assertThat(result.rowsRead()).isEqualTo(501);
         assertThat(result.rowsInserted()).isEqualTo(501);
-        verify(jdbcTemplate, org.mockito.Mockito.times(2)).batchUpdate(anyString(), any(BatchPreparedStatementSetter.class));
+        verify(jdbcTemplate, times(2)).batchUpdate(anyString(), any(BatchPreparedStatementSetter.class));
     }
 
     @Test

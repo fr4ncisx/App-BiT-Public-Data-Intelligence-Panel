@@ -7,30 +7,28 @@ import com.appbit.geoanalytics.application.ingestion.in.dto.CsvIngestResult;
 import com.appbit.geoanalytics.application.shared.port.out.IdGeneratorPort;
 import com.appbit.geoanalytics.application.source.out.DataSourcePort;
 import com.appbit.geoanalytics.application.storage.dto.DatasetObjectKey;
-import com.appbit.geoanalytics.application.storage.port.out.DatasetObjectStoragePort;
 import com.appbit.geoanalytics.domain.source.vo.SourceFileName;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.AntennaJpaRepository;
-import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.RegionJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.concentration.csv.ConcentrationCsvRow;
 import com.appbit.geoanalytics.infrastructure.adapter.out.concentration.entity.ConcentrationMetricEntity;
-import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
-import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.config.IngestionProperties;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.pipeline.CsvBatchIngester;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.pipeline.RegionIndex;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.pipeline.RegionResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -45,16 +43,23 @@ public class IngestConcentrationService implements IngestConcentrationUseCase, C
     private static final BigDecimal MIN_LON = new BigDecimal("-180");
     private static final BigDecimal MAX_LON = new BigDecimal("180");
 
-    private final DatasetObjectStoragePort storagePort;
+    private static final String INSERT_SQL = """
+            INSERT INTO concentration_metrics (
+                id, source_id, region_id, ecgi, cluster_name, municipality,
+                day_date, period, active_users, sessions, download_bytes, upload_bytes,
+                average_session_duration_seconds, average_drop_rate, average_congestion,
+                total_calls, total_messages, latitude, longitude, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (source_id, ecgi, day_date, period) DO NOTHING
+            """;
+
     private final DataSourcePort dataSourcePort;
-    private final GenericCsvReader csvReader;
     private final AntennaJpaRepository antennaRepository;
-    private final RegionJpaRepository regionRepository;
+    private final RegionResolver regionResolver;
     private final IngestionLifecycleManager lifecycleManager;
-    private final TransactionTemplate transactionTemplate;
     private final IdGeneratorPort idGeneratorPort;
+    private final CsvBatchIngester batchIngester;
     private final JdbcTemplate jdbcTemplate;
-    private final IngestionProperties ingestionProperties;
 
     @Override
     public IngestConcentrationResult execute(DatasetObjectKey key) {
@@ -66,7 +71,7 @@ public class IngestConcentrationService implements IngestConcentrationUseCase, C
         }
 
         try {
-            var result = transactionTemplate.execute(_ -> ingest(key, sourceId));
+            var result = ingest(key, sourceId);
             lifecycleManager.complete(ingestionRun, result.rowsRead(), result.rowsInserted(), result.rowsRejected());
             return result;
         } catch (RuntimeException e) {
@@ -76,84 +81,54 @@ public class IngestConcentrationService implements IngestConcentrationUseCase, C
     }
 
     private IngestConcentrationResult ingest(DatasetObjectKey key, UUID sourceId) {
-        try (var inputStream = storagePort.openStream(key);
-             var iterator = csvReader.read(inputStream, ConcentrationCsvRow.class)) {
+        var existingEcgis = new HashSet<>(antennaRepository.findAllEcgis());
+        var regions = regionResolver.regions();
+        var processedKeys = new HashSet<String>();
 
-            var existingEcgis = new HashSet<>(antennaRepository.findAllEcgis());
-            var processedKeys = new HashSet<String>();
-            var metricsToInsert = new ArrayList<ConcentrationMetricEntity>();
-            var rejected = 0;
-            var readCount = 0;
+        var result = batchIngester.ingest(
+                key,
+                ConcentrationCsvRow.class,
+                row -> Optional.ofNullable(processRow(row, existingEcgis, processedKeys, regions, sourceId)),
+                this::batchInsertConcentrationMetrics);
 
-            while (iterator.hasNext()) {
-                readCount++;
-                var entity = processRow(iterator.next(), existingEcgis, processedKeys, sourceId);
-
-                if (entity != null) {
-                    metricsToInsert.add(entity);
-                } else {
-                    rejected++;
-                }
-            }
-
-            batchInsertConcentrationMetrics(metricsToInsert);
-
-            return IngestConcentrationResult.of(readCount, metricsToInsert.size(), rejected);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to ingest CSV stream: " + e.getMessage(), e);
-        }
+        return IngestConcentrationResult.of(result.rowsRead(), result.rowsInserted(), result.rowsRejected());
     }
 
     private void batchInsertConcentrationMetrics(List<ConcentrationMetricEntity> metrics) {
-        String sql = """
-            INSERT INTO concentration_metrics (
-                id, source_id, region_id, ecgi, cluster_name, municipality,
-                day_date, period, active_users, sessions, download_bytes, upload_bytes,
-                average_session_duration_seconds, average_drop_rate, average_congestion,
-                total_calls, total_messages, latitude, longitude, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (source_id, ecgi, day_date, period) DO NOTHING
-            """;
+        jdbcTemplate.batchUpdate(INSERT_SQL, new BatchPreparedStatementSetter() {
+            @Override
+            public void setValues(java.sql.PreparedStatement ps, int idx) throws java.sql.SQLException {
+                ConcentrationMetricEntity metric = metrics.get(idx);
+                ps.setObject(1, metric.getId());
+                ps.setObject(2, metric.getSourceId());
+                ps.setObject(3, metric.getRegionId());
+                ps.setString(4, metric.getEcgi());
+                ps.setString(5, metric.getClusterName());
+                ps.setString(6, metric.getMunicipality());
+                ps.setObject(7, metric.getDayDate());
+                ps.setString(8, metric.getPeriod());
+                ps.setLong(9, metric.getActiveUsers());
+                ps.setLong(10, metric.getSessions());
+                ps.setLong(11, metric.getDownloadBytes());
+                ps.setLong(12, metric.getUploadBytes());
+                ps.setInt(13, metric.getAverageSessionDurationSeconds());
+                ps.setBigDecimal(14, metric.getAverageDropRate());
+                ps.setBigDecimal(15, metric.getAverageCongestion());
+                ps.setInt(16, metric.getTotalCalls());
+                ps.setInt(17, metric.getTotalMessages());
+                ps.setBigDecimal(18, metric.getLatitude());
+                ps.setBigDecimal(19, metric.getLongitude());
+                ps.setTimestamp(20, Timestamp.from(metric.getCreatedAt()));
+            }
 
-        int batchSize = ingestionProperties.batchSize();
-        for (int i = 0; i < metrics.size(); i += batchSize) {
-            List<ConcentrationMetricEntity> batch = metrics.subList(i, Math.min(i + batchSize, metrics.size()));
-            jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-                @Override
-                public void setValues(java.sql.PreparedStatement ps, int idx) throws java.sql.SQLException {
-                    ConcentrationMetricEntity metric = batch.get(idx);
-                    ps.setObject(1, metric.getId());
-                    ps.setObject(2, metric.getSourceId());
-                    ps.setObject(3, metric.getRegionId());
-                    ps.setString(4, metric.getEcgi());
-                    ps.setString(5, metric.getClusterName());
-                    ps.setString(6, metric.getMunicipality());
-                    ps.setObject(7, metric.getDayDate());
-                    ps.setString(8, metric.getPeriod());
-                    ps.setLong(9, metric.getActiveUsers());
-                    ps.setLong(10, metric.getSessions());
-                    ps.setLong(11, metric.getDownloadBytes());
-                    ps.setLong(12, metric.getUploadBytes());
-                    ps.setInt(13, metric.getAverageSessionDurationSeconds());
-                    ps.setBigDecimal(14, metric.getAverageDropRate());
-                    ps.setBigDecimal(15, metric.getAverageCongestion());
-                    ps.setInt(16, metric.getTotalCalls());
-                    ps.setInt(17, metric.getTotalMessages());
-                    ps.setBigDecimal(18, metric.getLatitude());
-                    ps.setBigDecimal(19, metric.getLongitude());
-                    ps.setTimestamp(20, Timestamp.from(metric.getCreatedAt()));
-                }
-
-                @Override
-                public int getBatchSize() {
-                    return batch.size();
-                }
-            });
-        }
+            @Override
+            public int getBatchSize() {
+                return metrics.size();
+            }
+        });
     }
 
-    private ConcentrationMetricEntity processRow(ConcentrationCsvRow row, Set<String> existingEcgis, Set<String> processedKeys, UUID sourceId) {
+    private ConcentrationMetricEntity processRow(ConcentrationCsvRow row, Set<String> existingEcgis, Set<String> processedKeys, RegionIndex regions, UUID sourceId) {
         if (!isValidRow(row, existingEcgis)) {
             log.warn("Rejected ECGI {}: validation failed", row.ecgi().trim());
             return null;
@@ -165,14 +140,14 @@ public class IngestConcentrationService implements IngestConcentrationUseCase, C
             return null;
         }
 
-        var region = regionRepository.findByClusterName(row.cluster().trim());
+        var region = regions.byClusterName(row.cluster());
         if (region.isEmpty()) {
             log.warn("Rejected ECGI {}: region not found for cluster={} municipio={}", row.ecgi().trim(), row.cluster().trim(), row.municipio().trim());
             return null;
         }
 
         try {
-            return createMetric(row, sourceId, region.get().getId());
+            return createMetric(row, sourceId, region.get().id());
         } catch (RuntimeException e) {
             log.warn("Rejected ECGI {}: malformed metric data: {}", row.ecgi().trim(), e.getMessage());
             return null;
