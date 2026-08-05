@@ -5,7 +5,4 @@ public record CsvIngestResult(
         int rowsInserted,
         int rowsRejected
 ) {
-    public static CsvIngestResult of(int rowsRead, int rowsInserted, int rowsRejected) {
-        return new CsvIngestResult(rowsRead, rowsInserted, rowsRejected);
-    }
 }
