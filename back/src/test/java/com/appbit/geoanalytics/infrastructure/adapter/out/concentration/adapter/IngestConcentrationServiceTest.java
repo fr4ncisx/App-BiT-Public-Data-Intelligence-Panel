@@ -18,6 +18,7 @@ import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.Ant
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.RegionJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.concentration.csv.ConcentrationCsvRow;
 import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.config.IngestionProperties;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -78,7 +79,8 @@ class IngestConcentrationServiceTest {
         service = new IngestConcentrationService(
                 storagePort, dataSourcePort, csvReader,
                 antennaRepository, regionRepository,
-                lifecycleManager, transactionTemplate, idGeneratorPort, jdbcTemplate
+                lifecycleManager, transactionTemplate, idGeneratorPort, jdbcTemplate,
+                new IngestionProperties(true, 500, true)
         );
 
         mockRun = IngestionRun.builder()

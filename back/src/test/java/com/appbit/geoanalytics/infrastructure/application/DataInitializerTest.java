@@ -1,8 +1,9 @@
 package com.appbit.geoanalytics.infrastructure.application;
 
-import com.appbit.geoanalytics.application.ingestion.in.dto.CsvIngestResult;
-import com.appbit.geoanalytics.application.ingestion.in.dto.IngestionTaskResult;
 import com.appbit.geoanalytics.application.ingestion.in.IngestionOrchestrator;
+import com.appbit.geoanalytics.application.ingestion.in.dto.IngestionOutcome;
+import com.appbit.geoanalytics.application.ingestion.in.dto.IngestionTaskResult;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.config.IngestionProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,7 +33,7 @@ class DataInitializerTest {
     @BeforeEach
     void setUp() {
         when(applicationContext.getParent()).thenReturn(null);
-        initializer = new DataInitializer(orchestrator, applicationContext);
+        initializer = new DataInitializer(orchestrator, applicationContext, new IngestionProperties(true, 500, true));
     }
 
     @Test
@@ -47,10 +48,8 @@ class DataInitializerTest {
     @Test
     void ingestsAllFilesSuccessfully() {
         var results = List.of(
-                IngestionTaskResult.success("tensor_concentracao.csv",
-                        new CsvIngestResult(10, 10, 0)),
-                IngestionTaskResult.success("tensor_fluxo_vias.csv",
-                        new CsvIngestResult(5, 3, 2))
+                new IngestionTaskResult("tensor_concentracao.csv", true, IngestionOutcome.INGESTED, null, 10, 10, 0),
+                new IngestionTaskResult("tensor_fluxo_vias.csv", true, IngestionOutcome.INGESTED, null, 5, 3, 2)
         );
         when(orchestrator.executeAll()).thenReturn(CompletableFuture.completedFuture(results));
 
@@ -58,10 +57,9 @@ class DataInitializerTest {
     }
 
     @Test
-    void handlesAlreadyIngestedFilesWithZeroCounters() {
+    void handlesAlreadyIngestedFilesWithoutThrowing() {
         var results = List.of(
-                IngestionTaskResult.success("tensor_concentracao.csv",
-                        new CsvIngestResult(0, 0, 0))
+                new IngestionTaskResult("tensor_concentracao.csv", true, IngestionOutcome.ALREADY_INGESTED, null, 0, 0, 0)
         );
         when(orchestrator.executeAll()).thenReturn(CompletableFuture.completedFuture(results));
 
@@ -71,9 +69,8 @@ class DataInitializerTest {
     @Test
     void throwsWhenAnyIngestFails() {
         var results = List.of(
-                IngestionTaskResult.success("tensor_concentracao.csv",
-                        new CsvIngestResult(10, 10, 0)),
-                IngestionTaskResult.failed("tensor_od.csv", "Parse error")
+                new IngestionTaskResult("tensor_concentracao.csv", true, IngestionOutcome.INGESTED, null, 10, 10, 0),
+                new IngestionTaskResult("tensor_od.csv", false, IngestionOutcome.FAILED, "Parse error", 0, 0, 0)
         );
         when(orchestrator.executeAll()).thenReturn(CompletableFuture.completedFuture(results));
 
@@ -83,9 +80,21 @@ class DataInitializerTest {
     }
 
     @Test
+    void throwsWhenSkippedFileCountsAsFailure() {
+        var results = List.of(
+                new IngestionTaskResult("tensor_od.csv", false, IngestionOutcome.SKIPPED, "File not found in storage", 0, 0, 0)
+        );
+        when(orchestrator.executeAll()).thenReturn(CompletableFuture.completedFuture(results));
+
+        assertThatThrownBy(() -> initializer.run(new DefaultApplicationArguments()))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("tensor_od.csv: File not found in storage");
+    }
+
+    @Test
     void throwsUsingUnknownErrorWhenErrorMessageMissing() {
         var results = List.of(
-                IngestionTaskResult.failed("tensor_od.csv", null)
+                new IngestionTaskResult("tensor_od.csv", false, IngestionOutcome.FAILED, null, 0, 0, 0)
         );
         when(orchestrator.executeAll()).thenReturn(CompletableFuture.completedFuture(results));
 
@@ -101,5 +110,25 @@ class DataInitializerTest {
         assertThatThrownBy(() -> initializer.run(new DefaultApplicationArguments()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Storage unavailable");
+    }
+
+    @Test
+    void skipsIngestionWhenDisabled() {
+        initializer = new DataInitializer(orchestrator, applicationContext, new IngestionProperties(false, 500, true));
+
+        initializer.run(new DefaultApplicationArguments());
+
+        verifyNoInteractions(orchestrator);
+    }
+
+    @Test
+    void doesNotThrowWhenFailFastDisabled() {
+        initializer = new DataInitializer(orchestrator, applicationContext, new IngestionProperties(true, 500, false));
+        var results = List.of(
+                new IngestionTaskResult("tensor_od.csv", false, IngestionOutcome.FAILED, "Parse error", 0, 0, 0)
+        );
+        when(orchestrator.executeAll()).thenReturn(CompletableFuture.completedFuture(results));
+
+        initializer.run(new DefaultApplicationArguments());
     }
 }

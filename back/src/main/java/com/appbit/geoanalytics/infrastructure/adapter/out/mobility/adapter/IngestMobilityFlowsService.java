@@ -9,6 +9,7 @@ import com.appbit.geoanalytics.application.storage.port.out.DatasetObjectStorage
 import com.appbit.geoanalytics.domain.source.vo.SourceFileName;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.RegionJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.config.IngestionProperties;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
 import com.appbit.geoanalytics.infrastructure.adapter.out.mobility.csv.MobilityFlowCsvRow;
 import com.appbit.geoanalytics.infrastructure.adapter.out.mobility.entity.MobilityFlowEntity;
@@ -44,6 +45,7 @@ public class IngestMobilityFlowsService implements CsvIngestService {
     private final TransactionTemplate transactionTemplate;
     private final IdGeneratorPort idGeneratorPort;
     private final JdbcTemplate jdbcTemplate;
+    private final IngestionProperties ingestionProperties;
 
     @Override
     public String supportedFileName() {
@@ -56,7 +58,7 @@ public class IngestMobilityFlowsService implements CsvIngestService {
         var ingestionRun = lifecycleManager.start(key.value(), sourceId);
 
         if (ingestionRun == null) {
-            return CsvIngestResult.of(0, 0, 0);
+            return new CsvIngestResult(0, 0, 0);
         }
 
         try {
@@ -90,7 +92,7 @@ public class IngestMobilityFlowsService implements CsvIngestService {
 
             batchInsertMobilityFlows(flowsToInsert);
 
-            return CsvIngestResult.of(readCount, flowsToInsert.size(), rejected);
+            return new CsvIngestResult(readCount, flowsToInsert.size(), rejected);
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to ingest mobility flows CSV: " + e.getMessage(), e);
@@ -108,7 +110,7 @@ public class IngestMobilityFlowsService implements CsvIngestService {
             ON CONFLICT (source_id, origin_ecgi, destination_ecgi, predominant_period) DO NOTHING
             """;
 
-        int batchSize = 500;
+        int batchSize = ingestionProperties.batchSize();
         for (int i = 0; i < flows.size(); i += batchSize) {
             List<MobilityFlowEntity> batch = flows.subList(i, Math.min(i + batchSize, flows.size()));
             jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {

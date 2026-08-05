@@ -17,6 +17,7 @@ import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.csv.AntennaCsv
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.entity.RegionEntity;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.RegionJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.config.IngestionProperties;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -72,7 +73,8 @@ class IngestAntennasServiceTest {
         });
         service = new IngestAntennasService(
                 storagePort, dataSourcePort, csvReader, regionRepository,
-                lifecycleManager, transactionTemplate, idGeneratorPort, jdbcTemplate
+                lifecycleManager, transactionTemplate, idGeneratorPort, jdbcTemplate,
+                new IngestionProperties(true, 500, true)
         );
 
         mockRun = IngestionRun.builder()

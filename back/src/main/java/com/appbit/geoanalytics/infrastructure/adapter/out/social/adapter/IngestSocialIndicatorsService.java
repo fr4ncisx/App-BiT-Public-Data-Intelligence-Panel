@@ -12,6 +12,7 @@ import com.appbit.geoanalytics.domain.source.vo.SourceFileName;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.entity.RegionEntity;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.RegionJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.config.IngestionProperties;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
 import com.appbit.geoanalytics.infrastructure.adapter.out.social.csv.SocialIndicatorCsvRow;
 import com.appbit.geoanalytics.infrastructure.adapter.out.social.entity.SocialIndicatorEntity;
@@ -60,6 +61,7 @@ public class IngestSocialIndicatorsService implements IngestSocialIndicatorsUseC
     private final TransactionTemplate transactionTemplate;
     private final IdGeneratorPort idGeneratorPort;
     private final JdbcTemplate jdbcTemplate;
+    private final IngestionProperties ingestionProperties;
 
     @Override
     public IngestSocialIndicatorsResult execute(DatasetObjectKey key) {
@@ -117,7 +119,7 @@ public class IngestSocialIndicatorsService implements IngestSocialIndicatorsUseC
             ON CONFLICT (source_id, region_id, indicator_type) DO NOTHING
             """;
 
-        int batchSize = 500;
+        int batchSize = ingestionProperties.batchSize();
         for (int i = 0; i < indicators.size(); i += batchSize) {
             List<SocialIndicatorEntity> batch = indicators.subList(i, Math.min(i + batchSize, indicators.size()));
             jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
@@ -196,7 +198,7 @@ public class IngestSocialIndicatorsService implements IngestSocialIndicatorsUseC
     @Override
     public CsvIngestResult ingest(DatasetObjectKey key) {
         var result = execute(key);
-        return CsvIngestResult.of(result.rowsRead(), result.rowsInserted(), result.rowsRejected());
+        return new CsvIngestResult(result.rowsRead(), result.rowsInserted(), result.rowsRejected());
     }
 
     private UUID resolveSourceId(String fileName) {
