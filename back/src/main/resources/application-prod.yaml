@@ -7,7 +7,7 @@ spring:
     hikari:
       maximum-pool-size: 10
       minimum-idle: 5
-      connection-timeout: 5000
+      connection-timeout: 10000
       idle-timeout: 300000
       max-lifetime: 600000
       leak-detection-threshold: 10000
@@ -55,6 +55,6 @@ logging:
 
 springdoc:
   api-docs:
-    enabled: false
+    enabled: true
   swagger-ui:
-    enabled: false
+    enabled: true
