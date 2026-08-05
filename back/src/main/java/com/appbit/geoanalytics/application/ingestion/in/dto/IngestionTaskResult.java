@@ -2,24 +2,27 @@ package com.appbit.geoanalytics.application.ingestion.in.dto;
 
 import org.jspecify.annotations.Nullable;
 
+import java.util.regex.Pattern;
+
 public record IngestionTaskResult(
         String fileName,
         boolean success,
+        IngestionOutcome outcome,
         @Nullable String errorMessage,
         int rowsRead,
         int rowsInserted,
         int rowsRejected
 ) {
-    public static IngestionTaskResult success(String fileName, CsvIngestResult result) {
-        return new IngestionTaskResult(fileName, true, null,
-                result.rowsRead(), result.rowsInserted(), result.rowsRejected());
-    }
+    private static final int MAX_ERROR_MESSAGE_LENGTH = 1000;
+    private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\p{Cc}]");
 
-    public static IngestionTaskResult skipped(String fileName, String errorMessage) {
-        return new IngestionTaskResult(fileName, false, errorMessage, 0, 0, 0);
-    }
+    public IngestionTaskResult {
+        if (errorMessage != null) {
+            errorMessage = CONTROL_CHARACTERS.matcher(errorMessage).replaceAll(" ").trim();
 
-    public static IngestionTaskResult failed(String fileName, String errorMessage) {
-        return new IngestionTaskResult(fileName, false, errorMessage, 0, 0, 0);
+            if (errorMessage.length() > MAX_ERROR_MESSAGE_LENGTH) {
+                errorMessage = errorMessage.substring(0, MAX_ERROR_MESSAGE_LENGTH);
+            }
+        }
     }
 }
