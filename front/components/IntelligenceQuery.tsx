@@ -93,10 +93,16 @@ export default function IntelligenceQuery({ onNavigateToRegion, onAiAnswer }: In
     isUserAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   };
 
+  // Scroll only the chat container, never the page
+  const scrollChatToBottom = () => {
+    const el = chatContainerRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
+
   // Auto-scroll only if user was already near bottom
   useEffect(() => {
     if (isUserAtBottomRef.current) {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      scrollChatToBottom();
     }
   }, [messages]);
 
@@ -115,8 +121,8 @@ export default function IntelligenceQuery({ onNavigateToRegion, onAiAnswer }: In
       { id: assistantMsgId, role: "assistant", loading: true },
     ]);
     setQuery("");
-    // Force scroll to bottom after user sends message
-    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    // Keep focus on the input without scrolling the page; the messages effect scrolls the chat container
+    inputRef.current?.focus({ preventScroll: true });
 
     try {
       const res = await apiFetch<AiAnswer>("/data/queries", {
