@@ -4,6 +4,7 @@ import com.appbit.geoanalytics.application.ingestion.in.dto.IngestionOutcome;
 import com.appbit.geoanalytics.application.ingestion.in.dto.IngestionTaskResult;
 import com.appbit.geoanalytics.application.ingestion.out.IngestionRunPort;
 import com.appbit.geoanalytics.application.source.out.DataSourcePort;
+import com.appbit.geoanalytics.application.source.out.SourceCatalogEntry;
 import com.appbit.geoanalytics.application.storage.dto.DatasetObjectKey;
 import com.appbit.geoanalytics.application.storage.port.out.DatasetObjectStoragePort;
 import com.appbit.geoanalytics.domain.ingestion.enums.IngestionState;
@@ -11,21 +12,31 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RequiredArgsConstructor
 public class IngestionOrchestratorService implements IngestionOrchestrator {
 
     private static final String FILE_NOT_FOUND_MESSAGE = "File not found in storage";
+
+    private static final Map<String, Set<String>> PREREQUISITES = Map.of(
+            "tensor_concentracao.csv", Set.of("antenas_flp.csv"),
+            "tensor_fluxo_vias.csv", Set.of("antenas_flp.csv"),
+            "tensor_od.csv", Set.of("antenas_flp.csv"),
+            "tensor_tempo_deslocamento.csv", Set.of("antenas_flp.csv")
+    );
 
     private final DatasetObjectStoragePort storagePort;
     private final DataSourcePort dataSourcePort;
@@ -41,7 +52,8 @@ public class IngestionOrchestratorService implements IngestionOrchestrator {
         var serviceMap = buildServiceMap();
 
         var dataSources = dataSourcePort.findAll();
-        var futures = new java.util.ArrayList<CompletableFuture<IngestionTaskResult>>(dataSources.size());
+        var completed = new HashMap<String, IngestionTaskResult>();
+        var remaining = new ArrayList<SourceCatalogEntry>();
 
         for (var ds : dataSources) {
             var fileName = ds.fileName().value();
@@ -58,16 +70,47 @@ public class IngestionOrchestratorService implements IngestionOrchestrator {
                 continue;
             }
 
-            futures.add(processSource(service, ds.id(), fileName));
+            remaining.add(ds);
         }
 
-        if (futures.isEmpty()) {
-            return CompletableFuture.completedFuture(List.of());
+        while (!remaining.isEmpty()) {
+            var ready = remaining.stream()
+                    .filter(ds -> prerequisitesDone(ds.fileName().value(), completed, remaining))
+                    .collect(Collectors.toCollection(ArrayList::new));
+
+            if (ready.isEmpty()) {
+                var stuck = remaining.stream()
+                        .map(ds -> ds.fileName().value())
+                        .collect(Collectors.joining(", "));
+                throw new IllegalStateException("Could not progress ingestion; unmet prerequisites for: " + stuck);
+            }
+
+            var waveFutures = ready.stream()
+                    .map(ds -> processSource(serviceMap.get(ds.fileName().value()), ds.id(), ds.fileName().value()))
+                    .toList();
+
+            var waveResults = CompletableFuture.allOf(waveFutures.toArray(CompletableFuture[]::new))
+                    .thenApply(_ -> waveFutures.stream().map(CompletableFuture::join).toList())
+                    .join();
+
+            for (var i = 0; i < ready.size(); i++) {
+                completed.put(ready.get(i).fileName().value(), waveResults.get(i));
+            }
+
+            remaining.removeAll(ready);
         }
 
-        var all = futures.toArray(CompletableFuture[]::new);
-        return CompletableFuture.allOf(all)
-                .thenApply(_ -> futures.stream().map(CompletableFuture::join).toList());
+        return CompletableFuture.completedFuture(dataSources.stream()
+                .map(ds -> completed.get(ds.fileName().value()))
+                .filter(Objects::nonNull)
+                .toList());
+    }
+
+    private boolean prerequisitesDone(String fileName, Map<String, IngestionTaskResult> completed, List<SourceCatalogEntry> remaining) {
+        var prerequisites = PREREQUISITES.getOrDefault(fileName, Set.of());
+        return prerequisites.stream()
+                .allMatch(prerequisite -> completed.containsKey(prerequisite)
+                        || remaining.stream().noneMatch(ds -> ds.fileName().value().equals(prerequisite)));
     }
 
     private CompletableFuture<IngestionTaskResult> processSource(

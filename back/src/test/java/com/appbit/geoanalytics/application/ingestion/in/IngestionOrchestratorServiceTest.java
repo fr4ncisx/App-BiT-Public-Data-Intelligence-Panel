@@ -28,6 +28,7 @@ import java.util.concurrent.Executor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -237,6 +238,43 @@ class IngestionOrchestratorServiceTest {
         assertThat(results.getFirst().rowsInserted()).isZero();
         assertThat(results.getFirst().rowsRejected()).isZero();
         verify(storagePort, never()).exists(any());
+    }
+
+    @Test
+    void shouldIngestPrerequisiteBeforeDependent() {
+        var antenasEntry = entry("antenas_flp.csv");
+        var concentrationEntry = entry("tensor_concentracao.csv");
+        when(dataSourcePort.findAll()).thenReturn(List.of(antenasEntry, concentrationEntry));
+        when(ingestionRunPort.findLatestBySourceIdAndFileName(any(), any())).thenReturn(Optional.empty());
+        when(storagePort.exists(any())).thenReturn(true);
+        when(antennaService.ingest(any())).thenReturn(new CsvIngestResult(132, 132, 0));
+        when(concentrationService.ingest(any())).thenReturn(new CsvIngestResult(7920, 7920, 0));
+
+        var results = orchestrator.executeAll().join();
+
+        assertThat(results).hasSize(2);
+        assertThat(results).allMatch(IngestionTaskResult::success);
+        assertThat(results.get(0).fileName()).isEqualTo("antenas_flp.csv");
+        assertThat(results.get(1).fileName()).isEqualTo("tensor_concentracao.csv");
+
+        var inOrder = inOrder(antennaService, concentrationService);
+        inOrder.verify(antennaService).ingest(any());
+        inOrder.verify(concentrationService).ingest(any());
+    }
+
+    @Test
+    void shouldNotDeadlockWhenDependentPresentWithoutPrerequisite() {
+        var concentrationEntry = entry("tensor_concentracao.csv");
+        when(dataSourcePort.findAll()).thenReturn(List.of(concentrationEntry));
+        when(ingestionRunPort.findLatestBySourceIdAndFileName(any(), any())).thenReturn(Optional.empty());
+        when(storagePort.exists(any())).thenReturn(true);
+        when(concentrationService.ingest(any())).thenReturn(new CsvIngestResult(10, 10, 0));
+
+        var results = orchestrator.executeAll().join();
+
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().fileName()).isEqualTo("tensor_concentracao.csv");
+        assertThat(results.getFirst().outcome()).isEqualTo(IngestionOutcome.INGESTED);
     }
 
     private static SourceCatalogEntry entry(String fileName) {
