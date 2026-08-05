@@ -15,6 +15,7 @@ import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.entity.Antenna
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.entity.RegionEntity;
 import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.RegionJpaRepository;
 import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.config.IngestionProperties;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
@@ -51,6 +52,7 @@ public class IngestAntennasService implements IngestAntennasUseCase, CsvIngestSe
     private final TransactionTemplate transactionTemplate;
     private final IdGeneratorPort idGeneratorPort;
     private final JdbcTemplate jdbcTemplate;
+    private final IngestionProperties ingestionProperties;
 
     @Override
     public AntennaIngestResult execute(DatasetObjectKey key) {
@@ -108,7 +110,7 @@ public class IngestAntennasService implements IngestAntennasUseCase, CsvIngestSe
             ON CONFLICT (ecgi) DO NOTHING
             """;
 
-        int batchSize = 500;
+        int batchSize = ingestionProperties.batchSize();
         for (int i = 0; i < antennas.size(); i += batchSize) {
             List<AntennaEntity> batch = antennas.subList(i, Math.min(i + batchSize, antennas.size()));
             jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
@@ -212,7 +214,7 @@ public class IngestAntennasService implements IngestAntennasUseCase, CsvIngestSe
     @Override
     public CsvIngestResult ingest(DatasetObjectKey key) {
         var result = execute(key);
-        return CsvIngestResult.of(result.rowsRead(), result.rowsInserted(), result.rowsRejected());
+        return new CsvIngestResult(result.rowsRead(), result.rowsInserted(), result.rowsRejected());
     }
 
     private UUID resolveSourceId(String fileName) {

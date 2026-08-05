@@ -14,6 +14,7 @@ import com.appbit.geoanalytics.infrastructure.adapter.out.antenna.repository.Reg
 import com.appbit.geoanalytics.infrastructure.adapter.out.concentration.csv.ConcentrationCsvRow;
 import com.appbit.geoanalytics.infrastructure.adapter.out.concentration.entity.ConcentrationMetricEntity;
 import com.appbit.geoanalytics.infrastructure.adapter.out.csv.GenericCsvReader;
+import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.config.IngestionProperties;
 import com.appbit.geoanalytics.infrastructure.adapter.out.ingestion.manager.IngestionLifecycleManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,6 +54,7 @@ public class IngestConcentrationService implements IngestConcentrationUseCase, C
     private final TransactionTemplate transactionTemplate;
     private final IdGeneratorPort idGeneratorPort;
     private final JdbcTemplate jdbcTemplate;
+    private final IngestionProperties ingestionProperties;
 
     @Override
     public IngestConcentrationResult execute(DatasetObjectKey key) {
@@ -114,7 +116,7 @@ public class IngestConcentrationService implements IngestConcentrationUseCase, C
             ON CONFLICT (source_id, ecgi, day_date, period) DO NOTHING
             """;
 
-        int batchSize = 500;
+        int batchSize = ingestionProperties.batchSize();
         for (int i = 0; i < metrics.size(); i += batchSize) {
             List<ConcentrationMetricEntity> batch = metrics.subList(i, Math.min(i + batchSize, metrics.size()));
             jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
@@ -233,7 +235,7 @@ public class IngestConcentrationService implements IngestConcentrationUseCase, C
     @Override
     public CsvIngestResult ingest(DatasetObjectKey key) {
         var result = execute(key);
-        return CsvIngestResult.of(result.rowsRead(), result.rowsInserted(), result.rowsRejected());
+        return new CsvIngestResult(result.rowsRead(), result.rowsInserted(), result.rowsRejected());
     }
 
     private UUID resolveSourceId(String fileName) {

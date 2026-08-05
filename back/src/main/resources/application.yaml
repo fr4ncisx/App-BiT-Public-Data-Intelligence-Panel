@@ -58,6 +58,14 @@ appbit:
   api:
     cors:
       allowed-origins: ${APPBIT_API_CORS_ALLOWED_ORIGINS}
+  ingestion:
+    enabled: ${APPBIT_INGESTION_ENABLED:true}
+    batch-size: ${APPBIT_INGESTION_BATCH_SIZE:500}
+    fail-fast: ${APPBIT_INGESTION_FAIL_FAST:true}
+    skip-files: ${APPBIT_INGESTION_SKIP_FILES:tensor_mobilidade.csv,tensor_sequencias.csv,network_indicators_seed.csv,trajetos_comuns.csv,assinantes.csv,sumario_kanon.csv}
+    retry:
+      max-attempts: ${APPBIT_INGESTION_RETRY_MAX_ATTEMPTS:3}
+      base-delay-ms: ${APPBIT_INGESTION_RETRY_BASE_DELAY_MS:2000}
   storage:
     r2:
       endpoint: ${APPBIT_STORAGE_R2_ENDPOINT}
