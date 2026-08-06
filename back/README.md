@@ -6,10 +6,10 @@ employability, mentorship, mental health, and connectivity interventions are
 most needed.
 
 The backend for this MVP exposes stable contracts under `/api/v1`, stores raw
-source CSV files in Cloudflare R2, persists queryable aggregates in PostgreSQL,
-and returns evidence-based responses for maps, sources, and natural language
-queries. The system must never expose individual trajectories or personal
-mobility sequences.
+source CSV files in Backblaze B2 (an S3-compatible archive), persists queryable
+aggregates in PostgreSQL, and returns evidence-based responses for maps,
+sources, and natural language queries. The system must never expose individual
+trajectories or personal mobility sequences.
 
 ## Problem
 
@@ -29,9 +29,9 @@ experience.
 The backend target stack is Java 25, Maven 3.9+, Spring Boot 4.x, Spring MVC,
 Spring Data JPA, PostgreSQL, Flyway, Jackson CSV, MapStruct, Spring AI,
 OpenAPI/Swagger UI, JUnit 5, Mockito, Docker, Actuator, and an S3-compatible
-client for Cloudflare R2.
+client for Backblaze B2.
 
-Cloudflare R2 is the production object storage for fixed source CSV files.
+Backblaze B2 is the production object storage for fixed source CSV files.
 MinIO is only a local S3-compatible replacement for development and tests.
 PostgreSQL is the serving layer for catalog, maps, indicators, sources,
 ingestion audit, and AI query evidence.
@@ -42,7 +42,7 @@ The main dataset is Vísent CDRView. The MVP does not need every available CSV.
 It uses a prioritized subset and defers the highest-volume or highest-risk
 files until a controlled batch ingestion flow is ready.
 
-Use this object layout in both Cloudflare R2 and local MinIO:
+Use this object layout in both Backblaze B2 and local MinIO:
 
 ```text
 appbit-datasets/
@@ -98,7 +98,7 @@ The intended separation is:
   request correlation, CORS, OpenAPI, and exception translation.
 - `infrastructure.adapter.out.persistence`: JPA entities, repositories, and
   persistence mappers.
-- `infrastructure.adapter.out.storage`: S3-compatible adapter for Cloudflare R2
+- `infrastructure.adapter.out.storage`: S3-compatible adapter for Backblaze B2
   and local MinIO.
 - `infrastructure.identity`: UUIDv7 adapter for infrastructure-generated IDs.
 
@@ -124,11 +124,11 @@ The backend uses these variables:
 | `SPRING_DATASOURCE_URL` | PostgreSQL JDBC URL. |
 | `SPRING_DATASOURCE_USERNAME` | PostgreSQL username. |
 | `SPRING_DATASOURCE_PASSWORD` | PostgreSQL password. |
-| `APPBIT_STORAGE_R2_ENDPOINT` | S3-compatible endpoint for R2 or MinIO. |
+| `APPBIT_STORAGE_R2_ENDPOINT` | S3-compatible endpoint for Backblaze B2 or MinIO. |
 | `APPBIT_STORAGE_R2_ACCESS_KEY_ID` | Storage access key. |
 | `APPBIT_STORAGE_R2_SECRET_ACCESS_KEY` | Storage secret key. |
 | `APPBIT_STORAGE_R2_BUCKET_NAME` | Bucket that stores fixed source CSV files. |
-| `APPBIT_STORAGE_R2_REGION` | Storage region. Use `auto` for R2-compatible flows. |
+| `APPBIT_STORAGE_R2_REGION` | Storage region. For Backblaze B2 use the bucket region (e.g. `us-west-002`); `auto` is the R2 legacy default. |
 | `APPBIT_STORAGE_R2_CSV_PREFIX` | Prefix for fixed source CSV files. |
 | `APPBIT_INGESTION_ENABLED` | Master switch for startup CSV ingestion. Default `true`. |
 | `APPBIT_INGESTION_BATCH_SIZE` | Rows per insert batch; must be `>= 1`. Default `500`. |
@@ -138,7 +138,11 @@ The backend uses these variables:
 | `APPBIT_INGESTION_RETRY_BASE_DELAY_MS` | Base retry backoff in ms; real delay = base × attempt. |
 
 Local MinIO can use `http://localhost:9000` as the storage endpoint.
-Production values must point to the Cloudflare R2 endpoint and credentials.
+Production values must point to the Backblaze B2 endpoint and credentials.
+
+> The `APPBIT_STORAGE_R2_*` variable names are inherited from the original
+> adapter naming and are still used to target the S3-compatible API of Backblaze
+> B2 (and MinIO locally).
 
 ## Local execution
 
@@ -253,20 +257,20 @@ Error example:
 `ApiResponseCode` belong to the REST boundary. They must not be modeled as
 domain value objects or used inside business rules.
 
-## Cloudflare R2 and local MinIO
+## Backblaze B2 and local MinIO
 
-Cloudflare R2 is the production source-file archive. MinIO is the local
-replacement for Cloudflare R2 and exists only to support development and tests
+Backblaze B2 is the production source-file archive. MinIO is the local
+replacement for Backblaze B2 and exists only to support development and tests
 without external object-storage calls.
 
 Production storage values follow this shape:
 
 ```env
-APPBIT_STORAGE_R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
-APPBIT_STORAGE_R2_ACCESS_KEY_ID=<r2-access-key-id>
-APPBIT_STORAGE_R2_SECRET_ACCESS_KEY=<r2-secret-access-key>
+APPBIT_STORAGE_R2_ENDPOINT=https://s3.<region>.backblazeb2.com
+APPBIT_STORAGE_R2_ACCESS_KEY_ID=<b2-access-key-id>
+APPBIT_STORAGE_R2_SECRET_ACCESS_KEY=<b2-secret-access-key>
 APPBIT_STORAGE_R2_BUCKET_NAME=appbit-datasets
-APPBIT_STORAGE_R2_REGION=auto
+APPBIT_STORAGE_R2_REGION=<bucket-region>
 APPBIT_STORAGE_R2_CSV_PREFIX=raw/visent-cdrview
 ```
 
@@ -290,9 +294,9 @@ fixed source file names.
 
 Large files must be processed by streaming and chunked ingestion. The backend
 must never load a full large CSV into memory, and no public endpoint may open a
-CSV file from R2 or MinIO during request handling.
+CSV file from Backblaze B2 or MinIO during request handling.
 
-Cloudflare R2 stores raw source files. PostgreSQL stores metadata, ingestion
+Backblaze B2 stores raw source files. PostgreSQL stores metadata, ingestion
 runs, aggregates, indicators, and queryable evidence. AI responses must be
 built from prepared evidence generated by application use cases, not by free
 access to raw storage or direct unrestricted database exploration.
